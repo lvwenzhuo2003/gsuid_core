@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import time
 import uuid
 import random
@@ -438,41 +439,33 @@ class BaseMysApi:
 class MysApi(BaseMysApi):
     async def _pass(
         self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]:
-        # 警告：使用该服务（例如某RR等）需要注意风险问题
-        # 本项目不以任何形式提供相关接口
-        # 代码来源：GITHUB项目MIT开源
-        _pass_api = core_plugins_config.get_config('_pass_API').data
-        if _pass_api:
-            async with ClientSession(
-                connector=TCPConnector(verify_ssl=ssl_verify)
-            ) as client:
-                async with client.request(
-                    url=f'{_pass_api}&gt={gt}&challenge={ch}',
-                    method='GET',
-                ) as data:
-                    try:
-                        data = await data.json()
-                    except ContentTypeError:
-                        data = await data.text()
-                        return None, None
-                    logger.debug(data)
-                    if isinstance(data, int):
-                        return None, None
-                    else:
-                        if 'code' in data and data['code'] != 0:
-                            if 'info' in data:
-                                msg = data["info"]
-                            else:
-                                msg = f'错误码{data["code"]}, 请检查API是否配置正确'
-                            logger.info(f'[upass] {msg}')
-                            return None, None
-                        validate = data['data']['validate']
-                        ch = data['data']['challenge']
-        else:
-            validate = None
-
-        return validate, ch
+    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        # 免责声明：
+        # 此模块使用了第三方验证码识别服务，该服务由第三方提供，与本模块作者无关。
+        # 此段代码随附在程序中仅供使用者之方便，您可以自愿启用或禁用此模块。
+        # 启用此模块即代表您与您的用户：
+        # 1. 同意将以遵守当地法律法规、遵守《米哈游通行证用户服务协议》(https://user.mihoyo.com/#/agreement)、以及第三方服务商的服务条款为前提使用本模块；
+        # 2. 知晓并同意本模块作者不对任何使用本模块所产生的任何后果负责；
+        # 3. 知晓并同意在使用本模块时，您的部分信息将会被发送至第三方服务商，第三方服务商可能会记录并分享这些信息；
+        # 4. 知晓您可以随时停用本模块，但是本模块一旦停用，您和您的用户将无法使用本模块提供的功能；
+        # 5. 您知晓并同意，鉴于项目的特殊性，作者有权在不另行通知您的情况下删除、修改、停用本模块的部分或全部功能、或终止对本模块的支持；
+        # 6. 您知晓并同意，此免责声明具有法律效力，并且作者有权在不另行通知您的情况下修改此免责声明。
+        # TODO: 请根据你使用的服务文档适当地修改代码
+        # 启用此模块前，请确保 data/core_config.json 中 CaptchaPass, MysPass 已设置为 True，并且 _pass_API_secret 和 _pass_API_url 已设置
+        import anticaptchaofficial.geetestproxyless as geetest
+        _pass_api_secret = core_plugins_config.get_config('_pass_API_secret').data
+        solver = geetest.geetestProxyless()
+        solver.set_verbose(1)
+        solver.set_key(_pass_api_secret)
+        solver.set_website_url('https://webstatic.mihoyo.com/bbs/event/signin-ys/index.html')
+        solver.set_gt_key(gt)
+        solver.set_challenge_key(ch)
+        result = solver.solve_and_return_solution()
+        if solver.err_string != '':
+            raise ConnectionError(f'An error occurred while solving the captcha. Error: {solver.err_string}')
+        validate = result['validate']
+        seccode = result['seccode']
+        return validate, ch, seccode
 
     async def _upass(self, header: Dict, is_bbs: bool = False) -> str:
         logger.info('[upass] 进入处理...')
@@ -484,8 +477,11 @@ class MysApi(BaseMysApi):
             return ''
         gt = raw_data['data']['gt']
         ch = raw_data['data']['challenge']
+        try:
+            vl, ch, seccode = await self._pass(gt, ch, header)
+        except ConnectionError:
+            return ''
 
-        vl, ch = await self._pass(gt, ch, header)
 
         if vl:
             await self.get_header_and_vl(header, ch, vl, is_bbs)

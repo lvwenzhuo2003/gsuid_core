@@ -13,6 +13,7 @@ packages = [{include = "gsuid_core"}]
 "Bug Tracker" = "https://github.com/Genshin-bots/gsuid-core/issues"
 
 [tool.poetry.dependencies]
+anticaptchaofficial = ">=1.0.58"
 python = "^3.8.1"
 httpx = ">=0.23.0"
 beautifulsoup4 = ">=4.11.1"
@@ -47,12 +48,6 @@ pycln = "^2.1.2"
 
 [tool.poetry.scripts]
 core = 'gsuid_core.core:main'
-
-
-[[tool.poetry.source]]
-name = "mirrors"
-url = "https://mirrors.bfsu.edu.cn/pypi/web/simple/"
-priority = "default"
 
 [build-system]
 requires = ["poetry-core"]
