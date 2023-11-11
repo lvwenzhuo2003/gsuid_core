@@ -138,7 +138,7 @@ class BaseMysApi:
         device_id = str(uuid.uuid4()).lower()
         return device_id
 
-    def generate_fp(self, length: int = 13) -> str:
+    def generate_random_fp(self, length: int = 13) -> str:
         char = digits + "abcdef"
         return ''.join(random.choices(char, k=length))
 
@@ -158,11 +158,36 @@ class BaseMysApi:
     def get_seed(self):
         return self.get_device_id(), str(int(time.time() * 1000))
 
-    async def generate_fp_by_uid(
-        self, uid: str, seed_id: str, seed_time: str, model_name: str
+    async def generate_fake_fp(
+        self, device_id: str, seed_id: str, seed_time: str
+    ):
+        return await self.generate_fp(
+            device_id,
+            'PHK110',
+            'PHK110',
+            'OP5913L1',
+            'taro',
+            '1f1971b188c472f0',
+            'OnePlus/PHK110/OP5913L1:13/'
+            'SKQ1.221119.001/T.1328291_b9_41:user/release-keys',
+            seed_id,
+            seed_time,
+        )
+
+    async def generate_fp(
+        self,
+        device_id: str,
+        model_name: str,
+        device: str,
+        device_type: str,
+        board: str,
+        oaid: str,
+        device_info: str,
+        seed_id: str,
+        seed_time: str,
     ) -> str:
-        device_id = await self.get_user_device_id(uid)
-        ext_fields = f'''{{\"cpuType\":\"arm64-v8a\",\"romCapacity\":\"512\",\"productName\":\"{model_name}\",\"romRemain\":\"422\",\"manufacturer\":\"XiaoMi\",\"appMemory\":\"512\",\"hostname\":\"dg02-pool03-kvm87\",\"screenSize\":\"1240x2662\",\"osVersion\":\"13\",\"aaid\":\"{self.generate_ID()}\",\"vendor\":\"中国联通\",\"accelerometer\":\"1.4883357x7.1712894x6.2847486\",\"buildTags\":\"release-keys\",\"model\":\"{model_name}\",\"brand\":\"XiaoMi\",\"oaid\":\"DD8D6ADFC74F4725BBD548BF23D708E46f70bfc8a663a364da14b74c490eb0c5\",\"hardware\":\"qcom\",\"deviceType\":\"OP5913L1\",\"devId\":\"REL\",\"serialNumber\":\"unknown\",\"buildTime\":\"1687848011000\",\"buildUser\":\"root\",\"ramCapacity\":\"469679\",\"magnetometer\":\"20.081251x-27.487501x2.1937501\",\"display\":\"{model_name}_13.1.0.181(CN01)\",\"ramRemain\":\"215344\",\"deviceInfo\":\"XiaoMi\\\/{model_name}\\\/OP5913L1:13\\\/SKQ1.221119.001\\\/T.118e6c7-5aa23-73911:user\\\/release-keys\",\"gyroscope\":\"0.030226856x0.014647375x0.010652636\",\"vaid\":\"{self.generate_ID()}\",\"buildType\":\"user\",\"sdkVersion\":\"33\",\"board\":\"taro\"}}'''  # noqa
+        ext_fields = f'''{{"cpuType":"arm64-v8a","romCapacity":"512","productName":"{device}","romRemain":"422","manufacturer":"XiaoMi","appMemory":"512","hostname":"dg02-pool03-kvm87","screenSize":"1240x2662","osVersion":"13","aaid":"{self.generate_ID()}","vendor":"中国联通","accelerometer":"1.4883357x7.1712894x6.2847486","buildTags":"release-keys","model":"{model_name}","brand":"XiaoMi","oaid":"{oaid}","hardware":"qcom","deviceType":"{device_type}","devId":"REL","serialNumber":"unknown","buildTime":"1687848011000","buildUser":"root","ramCapacity":"469679","magnetometer":"20.081251x-27.487501x2.1937501","display":"{model_name}_13.1.0.181(CN01)","ramRemain":"215344","deviceInfo":"{device_info}","gyroscope":"0.030226856x0.014647375x0.010652636","vaid":"{self.generate_ID()}","buildType":"user","sdkVersion":"33","board":"{board}"}}'''  # noqa
+
         body = {
             'device_id': self.generate_seed(16),
             'seed_id': seed_id,  # uuid4
@@ -171,7 +196,7 @@ class BaseMysApi:
             'ext_fields': ext_fields,
             'app_name': 'bbs_cn',
             'bbs_device_id': device_id,
-            'device_fp': self.generate_fp(),
+            'device_fp': self.generate_random_fp(),
         }
 
         HEADER = copy.deepcopy(self._HEADER)
@@ -196,7 +221,7 @@ class BaseMysApi:
         body = {
             "app_version": self.mysVersion,
             "device_id": device_id,
-            "device_name": f"XiaoMi{model_name}",
+            "device_name": f"{model_name}",
             "os_version": "33",
             "platform": "Android",
             "registration_id": self.generate_seed(19),
@@ -205,7 +230,7 @@ class BaseMysApi:
         HEADER = copy.deepcopy(self._HEADER)
         HEADER['x-rpc-device_id'] = device_id
         HEADER['x-rpc-device_fp'] = device_fp
-        HEADER['x-rpc-device_name'] = f"XiaoMi{model_name}"
+        HEADER['x-rpc-device_name'] = f"{model_name}"
         HEADER['x-rpc-device_model'] = model_name
         HEADER['DS'] = generate_passport_ds('', body)
         HEADER['cookie'] = cookie
@@ -320,7 +345,7 @@ class BaseMysApi:
         device_id = self.get_device_id()
         seed_id, seed_time = self.get_seed()
         model_name = self.generate_model_name()
-        fp = await self.generate_fp_by_uid(uid, seed_id, seed_time, model_name)
+        fp = await self.generate_fake_fp(device_id, seed_id, seed_time)
         if app_cookie is None:
             app_cookie = await self.get_stoken(uid)
             if app_cookie is None:
@@ -348,10 +373,26 @@ class BaseMysApi:
             uid = None
             if params and 'role_id' in params:
                 uid = params['role_id']
+            elif data and 'role_id' in data:
+                uid = data['role_id']
+
+            if uid is not None:
                 device_id = await self.get_user_device_id(uid)
                 header['x-rpc-device_fp'] = await self.get_user_fp(uid)
                 if device_id is not None:
                     header['x-rpc-device_id'] = device_id
+
+                dfp: Optional[str] = await GsUser.get_user_attr_by_uid(
+                    uid, 'device_info', 'sr' if self.is_sr else None
+                )
+                if dfp is not None:
+                    df = dfp.split('/')
+                    header['User-Agent'] = (
+                        f"Mozilla/5.0 (Linux; Android 13; {df[1]} {df[3]}"
+                        "; wv)AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Version/4.0 Chrome/104.0.5112.97"
+                        f"Mobile Safari/537.36 miHoYoBBS/2{mys_version}"
+                    )
 
             logger.debug(header)
             for _ in range(2):
@@ -383,15 +424,6 @@ class BaseMysApi:
                     # 针对1034做特殊处理
                     if retcode == 1034 or retcode == 5003:
                         if uid:
-                            nd = await self.ck_in_new_device(uid)
-                            ck = header['Cookie']
-                            if 'DEVICEFP_SEED_ID' not in ck and nd:
-                                header['Cookie'] = (
-                                    f'DEVICEFP_SEED_ID={nd[2]};'
-                                    f'DEVICEFP_SEED_TIME={nd[3]};'
-                                    f'{ck};DEVICE_FP={nd[0]}'
-                                )
-
                             header['x-rpc-challenge_game'] = (
                                 '6' if self.is_sr else '2'
                             )
