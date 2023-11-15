@@ -55,19 +55,24 @@ class MessageSegment:
         elif isinstance(img, Path):
             with open(str(img), 'rb') as fp:
                 img = fp.read()
+        elif isinstance(img, (bytearray, memoryview)):
+            img = bytes(img)
         else:
             if img.startswith('http'):
                 return Message(type='image', data=f'link://{img}')
-            if img.startswith('base64://'):
+            if img.startswith('base64://') and not enable_pic_srv:
                 return Message(type='image', data=img)
-            with open(img, 'rb') as fp:
-                img = fp.read()
+            elif img.startswith('base64://'):
+                img = b64decode(img.replace('base64://', ''))
+            else:
+                with open(img, 'rb') as fp:
+                    img = fp.read()
 
         if enable_pic_srv:
             name = f'{uuid.uuid1()}.jpg'
             path = image_res / name
             path.write_bytes(img)
-            data = f'{pic_srv}/genshinuid/image/{name}'
+            data = f'link://{pic_srv}/genshinuid/image/{name}'
         else:
             data = f'base64://{b64encode(img).decode()}'
 
@@ -109,6 +114,8 @@ class MessageSegment:
                 msg_list.append(msg)
             elif isinstance(msg, bytes):
                 msg_list.append(MessageSegment.image(msg))
+            elif isinstance(msg, (bytearray, memoryview)):
+                continue
             else:
                 if msg.startswith('base64://'):
                     msg_list.append(Message(type='image', data=msg))
@@ -127,6 +134,8 @@ class MessageSegment:
         elif isinstance(content, Path):
             with open(str(content), 'rb') as fp:
                 content = fp.read()
+        elif isinstance(content, (bytearray, memoryview)):
+            content = bytes(content)
         else:
             if content.startswith('base64://'):
                 return Message(type='image', data=content)
@@ -141,6 +150,8 @@ class MessageSegment:
                 file = fp.read()
         elif isinstance(content, bytes):
             file = content
+        elif isinstance(content, (bytearray, memoryview)):
+            file = bytes(content)
         else:
             if content.startswith('http'):
                 link = content
@@ -163,19 +174,37 @@ class MessageSegment:
         return Message(type=f'log_{type}', data=content)
 
 
+async def _conver_image_to_url(message: Message) -> List[Message]:
+    if pclient is not None:
+        img_text: str = message.data  # type: ignore
+        bio = BytesIO(b64decode(img_text[9:]))
+        img = Image.open(bio)
+        img_url = await pclient.upload(f'{uuid.uuid4()}.jpg', bio)
+        _message = [
+            MessageSegment.image(img_url if img_url else img_text),
+            MessageSegment.image_size(img.size),
+        ]
+        return _message
+    return [message]
+
+
 async def _convert_message(
     message: Union[Message, str, bytes]
 ) -> List[Message]:
     if isinstance(message, Message):
-        if message.type == 'image' and pclient is not None:
-            img_text: str = message.data  # type: ignore
-            bio = BytesIO(b64decode(img_text[9:]))
-            img = Image.open(bio)
-            img_url = await pclient.upload(f'{uuid.uuid4()}.jpg', bio)
-            _message = [
-                MessageSegment.image(img_url if img_url else img_text),
-                MessageSegment.image_size(img.size),
-            ]
+        if message.data is None:
+            return [message]
+
+        if message.type == 'image':
+            _message = await _conver_image_to_url(message)
+        elif message.type == 'node':
+            _temp = []
+            for i in message.data:
+                if i.type == 'image':
+                    _temp.extend(await _conver_image_to_url(i))
+                else:
+                    _temp.append(i)
+            _message = [MessageSegment.node(_temp)]
         else:
             _message = [message]
     elif isinstance(message, str):
@@ -205,9 +234,11 @@ async def _convert_message(
             MessageSegment.image(img_url if img_url else message),
             MessageSegment.image_size(img.size),
         ]
+    elif isinstance(message, (bytearray, memoryview)):
+        _message = [MessageSegment.image(bytes(message))]
     else:
         _message = [message]
-    return _message
+    return _message  # type: ignore
 
 
 async def convert_message(

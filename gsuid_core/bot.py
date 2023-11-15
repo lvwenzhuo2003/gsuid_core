@@ -11,8 +11,9 @@ from gsuid_core.models import Event, Message, MessageSend
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
 from gsuid_core.segment import MessageSegment, to_markdown, convert_message
 
-is_specific_msg_id = core_plugins_config.get_config('EnableSpecificMsgId').data
-specific_msg_id = core_plugins_config.get_config('SpecificMsgId').data
+is_sp_msg_id: str = core_plugins_config.get_config('EnableSpecificMsgId').data
+sp_msg_id: str = core_plugins_config.get_config('SpecificMsgId').data
+is_markdown: List = core_plugins_config.get_config('SendMDPlatform').data
 
 
 class _Bot:
@@ -37,7 +38,7 @@ class _Bot:
     ):
         _message = await convert_message(message)
 
-        if bot_id in ['qqgroup']:
+        if bot_id in is_markdown:
             _message = await to_markdown(_message)
 
         if at_sender and sender_id:
@@ -46,8 +47,8 @@ class _Bot:
         if group_id:
             _message.append(Message('group', group_id))
 
-        if is_specific_msg_id and not msg_id:
-            msg_id = specific_msg_id
+        if is_sp_msg_id and not msg_id:
+            msg_id = sp_msg_id
 
         send = MessageSend(
             content=_message,
@@ -229,7 +230,9 @@ class Bot:
         return await self.bot.target_send(
             message,
             self.ev.user_type,
-            self.ev.group_id if self.ev.group_id else self.ev.user_id,
+            self.ev.user_id
+            if self.ev.user_type == 'direct'
+            else self.ev.group_id,
             self.ev.real_bot_id,
             self.bot_self_id,
             self.ev.msg_id,

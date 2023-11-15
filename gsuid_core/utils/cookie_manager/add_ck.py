@@ -2,8 +2,11 @@ from pathlib import Path
 from typing import Dict, List
 from http.cookies import SimpleCookie
 
+from PIL import Image
+
 from gsuid_core.utils.api.mys_api import mys_api
 from gsuid_core.utils.error_reply import UID_HINT
+from gsuid_core.utils.image.convert import convert_img
 from gsuid_core.utils.database.utils import SERVER, SR_SERVER
 from gsuid_core.utils.database.models import GsBind, GsUser, GsCache
 
@@ -57,6 +60,8 @@ async def refresh_ck_by_uid_list(bot_id: str, uid_dict: Dict):
     error_num = 0
     for uid in uid_dict:
         stoken = await GsUser.get_user_stoken_by_uid(uid)
+        # account_id = await GsUser.get_user_attr_by_uid(uid, 'mys_id')
+        # _stoken = f'{stoken};account_id={account_id}'
         if stoken is None:
             skip_num += 1
             error_num += 1
@@ -97,9 +102,8 @@ async def _deal_ck_to_pic(im: str) -> bytes:
         status_pic = pic_path / 'ck_ok.png'
     else:
         status_pic = pic_path / 'all_ok.png'
-    with open(status_pic, 'rb') as f:
-        img = f.read()
-    return img
+    img = Image.open(status_pic).convert('RGB')
+    return await convert_img(img)
 
 
 async def get_account_id(simp_dict: SimpleCookie) -> str:
@@ -264,7 +268,6 @@ async def _deal_ck(bot_id: str, mes: str, user_id: str) -> str:
             wd_uid=wd_uid_bind,
             fp=nd[0],
             device_id=nd[1],
-            OAID=None,
         )
     else:
         await GsUser.insert_data(
@@ -291,7 +294,6 @@ async def _deal_ck(bot_id: str, mes: str, user_id: str) -> str:
             device_id=nd[1],
             sr_push_switch='off',
             sr_sign_switch='off',
-            OAID=None,
         )
 
     im_list.append(
