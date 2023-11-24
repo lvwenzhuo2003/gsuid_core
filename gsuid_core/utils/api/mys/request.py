@@ -49,6 +49,7 @@ from .models import (
     GachaLog,
     MysGoods,
     MysOrder,
+    PostDraw,
     SignInfo,
     SignList,
     AbyssData,
@@ -807,7 +808,9 @@ class MysApi(BaseMysApi):
             return cast(BsIndex, data['data'])
         return data
 
-    async def post_draw(self, uid: str, role_id: int) -> Union[int, Dict]:
+    async def post_draw(
+        self, uid: str, role_id: int
+    ) -> Union[int, PostDraw, Dict]:
         server_id = self.RECOGNIZE_SERVER.get(uid[0])
         ck = await self.get_ck(uid, 'OWNER')
         if ck is None:
