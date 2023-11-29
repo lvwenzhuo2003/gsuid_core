@@ -3,7 +3,8 @@ from typing import Dict
 from .models import GSC, GsStrConfig, GsBoolConfig, GsListStrConfig
 
 CONIFG_DEFAULT: Dict[str, GSC] = {
-    'proxy': GsStrConfig('设置代理', '设置国际服的代理地址', ''),
+    'Gproxy': GsStrConfig('设置米游社国际代理', '设置国际服的代理地址', ''),
+    'Nproxy': GsStrConfig('设置米游社常规代理', '设置常规的代理地址', ''),
     '_pass_API_secret': GsStrConfig('神奇API secret', '设置某种神奇的API secret', ''),
     '_pass_API_url': GsStrConfig('神奇API url', '设置某种神奇的API url', ''),
     'restart_command': GsStrConfig(
@@ -67,4 +68,5 @@ CONIFG_DEFAULT: Dict[str, GSC] = {
     'SendButtonsPlatform': GsListStrConfig(
         '默认发送按钮的平台列表(用:连接)', '发送按钮的平台列表', []
     ),
+    'ForceSendMD': GsBoolConfig('强制使用MD发送图文', '强制使用MD发送图文', False),
 }

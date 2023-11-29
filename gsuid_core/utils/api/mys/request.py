@@ -68,7 +68,8 @@ from .models import (
     LoginTicketInfo,
 )
 
-proxy_url = core_plugins_config.get_config('proxy').data
+Gproxy = core_plugins_config.get_config('Gproxy').data
+Nproxy = core_plugins_config.get_config('Nproxy').data
 ssl_verify = core_plugins_config.get_config('MhySSLVerify').data
 RECOGNIZE_SERVER = {
     '1': 'cn_gf01',
@@ -82,7 +83,8 @@ RECOGNIZE_SERVER = {
 
 
 class BaseMysApi:
-    proxy_url: Optional[str] = proxy_url if proxy_url else None
+    Gproxy: Optional[str] = Gproxy if Gproxy else None
+    Nproxy: Optional[str] = Nproxy if Nproxy else None
     mysVersion = mys_version
     _HEADER = {
         'x-rpc-app_version': mysVersion,
@@ -379,6 +381,13 @@ class BaseMysApi:
         data: Optional[Dict[str, Any]] = None,
         use_proxy: Optional[bool] = False,
     ) -> Union[Dict, int]:
+        if use_proxy and self.Gproxy:
+            proxy = self.Gproxy
+        elif self.Nproxy and not use_proxy:
+            proxy = self.Nproxy
+        else:
+            proxy = None
+
         async with ClientSession(
             connector=TCPConnector(verify_ssl=ssl_verify)
         ) as client:
@@ -415,7 +424,7 @@ class BaseMysApi:
                     headers=header,
                     params=params,
                     json=data,
-                    proxy=self.proxy_url if use_proxy else None,
+                    proxy=proxy,
                     timeout=300,
                 ) as resp:
                     try:
@@ -1155,13 +1164,20 @@ class MysApi(BaseMysApi):
             data['game_biz'] = 'hk4e_global'
             use_proxy = True
 
+        if use_proxy and self.Gproxy:
+            proxy = self.Gproxy
+        elif self.Nproxy and not use_proxy:
+            proxy = self.Nproxy
+        else:
+            proxy = None
+
         async with ClientSession() as client:
             async with client.request(
                 method='POST',
                 url=url,
                 headers=header,
                 json=data,
-                proxy=self.proxy_url if use_proxy else None,
+                proxy=proxy,
                 timeout=300,
             ) as resp:
                 raw_data = await resp.json()
