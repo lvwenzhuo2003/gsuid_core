@@ -190,10 +190,13 @@ class Bot:
                         _buttons.append(option)
                     else:
                         _buttons.append(Button(option, option, option))
-
-                await self.send(
-                    await to_markdown(_reply, _buttons, self.bot_id)
-                )
+                if self.ev.real_bot_id in enable_markdown_platform:
+                    await self.send(
+                        await to_markdown(_reply, _buttons, self.bot_id)
+                    )
+                else:
+                    _reply.append(MessageSegment.buttons(_buttons))
+                    await self.send(_reply)
             else:
                 if unsuported_platform:
                     _options: List[str] = []
@@ -220,8 +223,10 @@ class Bot:
             await self.send(reply)
 
         if is_mutiply:
+            # 标注uuid
             if self.uuid not in self.mutiply_instances:
                 self.mutiply_instances[self.uuid] = self
+                # 标注群
                 if self.gid not in self.mutiply_map:
                     self.mutiply_map[self.gid] = self.uuid
                 self.mutiply_tag = True
@@ -230,7 +235,7 @@ class Bot:
             while self.mutiply_resp == []:
                 await asyncio.wait_for(self.mutiply_event.wait(), timeout)
 
-            self.mutiply_event.clear()
+            self.mutiply_event = asyncio.Event()
             return self.mutiply_resp.pop(0)
         elif is_recive:
             self.instances[self.uuid] = self
