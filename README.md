@@ -7,6 +7,8 @@
 
 [KimigaiiWuyi/GenshinUID](https://github.com/KimigaiiWuyi/GenshinUID) 的核心部分，平台无关，支持 HTTP/WS 形式调用，便于移植到其他平台以及框架。
 
+此版本已在gsuid_core/plugins中集成了GenshinUID核心。请在git clone时添加--recursive，或者完成后展开submodule。
+
 **🎉[详细文档](https://docs.sayu-bot.com)**
 
 ## 安装Core
