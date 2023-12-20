@@ -667,4 +667,6 @@ res_data
 GsData.db
 data
 core_help.jpg
+gs_restart.sh
 logs
+.pdm-python

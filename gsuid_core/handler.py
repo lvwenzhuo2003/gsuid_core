@@ -7,6 +7,7 @@ from gsuid_core.bot import Bot, _Bot
 from gsuid_core.logger import logger
 from gsuid_core.trigger import Trigger
 from gsuid_core.config import core_config
+from gsuid_core.global_val import global_val
 from gsuid_core.models import Event, Message, MessageReceive
 
 command_start = core_config.get_config('command_start')
@@ -71,6 +72,7 @@ async def msg_process(msg: MessageReceive) -> Event:
 
 
 async def handle_event(ws: _Bot, msg: MessageReceive):
+    global_val['receive'] += 1
     # 获取用户权限，越小越高
     msg.user_pm = user_pm = await get_user_pml(msg)
     event = await msg_process(msg)
@@ -83,20 +85,21 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
     mutiply_instances = Bot.get_mutiply_instances()
     mutiply_map = Bot.get_mutiply_map()
 
+    if uuid in instances and instances[uuid].receive_tag:
+        instances[uuid].resp.append(event)
+        instances[uuid].set_event()
+        return
+
     if (
         gid in mutiply_map
         and event.user_type != 'direct'
         and mutiply_map[gid] in mutiply_instances
+        and mutiply_instances[mutiply_map[gid]].mutiply_tag
     ):
         mutiply_instances[mutiply_map[gid]].mutiply_resp.append(event)
         mutiply_instances[mutiply_map[gid]].set_mutiply_event()
         if uuid == mutiply_instances[mutiply_map[gid]].uuid:
             return
-
-    if uuid in instances:
-        instances[uuid].resp.append(event)
-        instances[uuid].set_event()
-        return
 
     is_start = False
     if command_start and event.raw_text:
@@ -111,13 +114,14 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
     valid_event: Dict[Trigger, int] = {}
     pending = [
         _check_command(
-            SL.lst[sv].TL[tr],
+            SL.lst[sv].TL[_type][tr],
             SL.lst[sv].priority,
             event,
             valid_event,
         )
         for sv in SL.lst
-        for tr in SL.lst[sv].TL
+        for _type in SL.lst[sv].TL
+        for tr in SL.lst[sv].TL[_type]
         if (
             SL.lst[sv].enabled
             and user_pm <= SL.lst[sv].pm
@@ -127,7 +131,9 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
                 True
                 if SL.lst[sv].area == 'ALL'
                 or (msg.group_id and SL.lst[sv].area == 'GROUP')
-                or (not msg.group_id and SL.lst[sv].area == 'DIRECT')
+                or (
+                    event.user_type == 'direct' and SL.lst[sv].area == 'DIRECT'
+                )
                 else False
             )
             and (
@@ -147,6 +153,9 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
             _event = deepcopy(event)
             message = await trigger.get_command(_event)
             bot = Bot(ws, _event)
+
+            await count_data(event, trigger)
+
             logger.info(
                 '[命令触发]',
                 trigger=[_event.raw_text, trigger.type, trigger.keyword],
@@ -155,6 +164,18 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
             ws.queue.put_nowait(trigger.func(bot, message))
             if trigger.block:
                 break
+
+
+async def count_data(event: Event, trigger: Trigger):
+    global_val['command'] += 1
+    if event.group_id:
+        if event.group_id not in global_val['group']:
+            global_val['group'][event.group_id] = {}
+
+        if trigger.keyword not in global_val['group'][event.group_id]:
+            global_val['group'][event.group_id][trigger.keyword] = 0
+        else:
+            global_val['group'][event.group_id][trigger.keyword] += 1
 
 
 async def _check_command(

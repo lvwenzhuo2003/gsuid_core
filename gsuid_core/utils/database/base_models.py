@@ -27,7 +27,8 @@ T_Push = TypeVar('T_Push', bound='Push')
 P = ParamSpec("P")
 R = TypeVar("R")
 
-db_url = str(get_res_path().parent / 'GsData.db')
+DB_PATH = get_res_path() / 'GsData.db'
+db_url = str(DB_PATH)
 url = f'sqlite+aiosqlite:///{db_url}'
 engine = create_async_engine(url, pool_recycle=1500)
 async_maker = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -44,6 +45,7 @@ def with_session(
     return wrapper  # type: ignore
 
 
+# https://github.com/tiangolo/sqlmodel/issues/264
 class BaseIDModel(SQLModel):
     id: Optional[int] = Field(default=None, primary_key=True, title='序号')
 
