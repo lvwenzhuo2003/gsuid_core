@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Dict, List, Union, Literal, overload
+from typing import Any, Dict, List, Union, Literal, overload
 
 CONFIG_PATH = Path(__file__).parent / 'config.json'
 
@@ -12,15 +12,32 @@ CONFIG_DEFAULT = {
     'misfire_grace_time': 90,
     'log': {
         'level': 'INFO',
+        'output': ['stdout', 'stderr', 'file'],
         # ...
     },
+    'enable_empty_start': True,
     'command_start': [],
     'sv': {},
+    'plugins': {},
 }
+
 STR_CONFIG = Literal['HOST', 'PORT']
 INT_CONFIG = Literal['misfire_grace_time']
 LIST_CONFIG = Literal['superusers', 'masters', 'command_start']
-DICT_CONFIG = Literal['sv', 'log']
+DICT_CONFIG = Literal['sv', 'log', 'plugins']
+BOOL_CONFIG = Literal['enable_empty_start']
+
+plugins_sample = {
+    'name': '',
+    'pm': 6,
+    'priority': 5,
+    'enabled': True,
+    'area': 'SV',
+    'black_list': [],
+    'white_list': [],
+    'prefix': '',
+    'sv': {},
+}
 
 
 class CoreConfig:
@@ -38,32 +55,37 @@ class CoreConfig:
     def update_config(self):
         # 打开config.json
         with open(CONFIG_PATH, 'r', encoding='UTF-8') as f:
-            self.config = json.load(f)
+            self.config: Dict[str, Any] = json.load(f)
         # 对没有的值，添加默认值
         for key in CONFIG_DEFAULT:
             if key not in self.config:
                 self.config[key] = CONFIG_DEFAULT[key]
+            if isinstance(CONFIG_DEFAULT[key], Dict):
+                for sub_key in CONFIG_DEFAULT[key]:
+                    if sub_key not in self.config[key]:
+                        self.config[key][sub_key] = CONFIG_DEFAULT[key][
+                            sub_key
+                        ]
 
         # 重新写回
         self.write_config()
 
     @overload
-    def get_config(self, key: STR_CONFIG) -> str:
-        ...
+    def get_config(self, key: STR_CONFIG) -> str: ...
 
     @overload
-    def get_config(self, key: DICT_CONFIG) -> Dict:
-        ...
+    def get_config(self, key: DICT_CONFIG) -> Dict: ...
 
     @overload
-    def get_config(self, key: LIST_CONFIG) -> List:
-        ...
+    def get_config(self, key: LIST_CONFIG) -> List: ...
 
     @overload
-    def get_config(self, key: INT_CONFIG) -> int:
-        ...
+    def get_config(self, key: INT_CONFIG) -> int: ...
 
-    def get_config(self, key: str) -> Union[str, Dict, List, int]:
+    @overload
+    def get_config(self, key: BOOL_CONFIG) -> bool: ...
+
+    def get_config(self, key: str) -> Union[str, Dict, List, int, bool]:
         if key in self.config:
             return self.config[key]
         elif key in CONFIG_DEFAULT:
@@ -73,18 +95,23 @@ class CoreConfig:
             return {}
 
     @overload
-    def set_config(self, key: STR_CONFIG, value: str) -> bool:
-        ...
+    def set_config(self, key: STR_CONFIG, value: str) -> bool: ...
 
     @overload
-    def set_config(self, key: LIST_CONFIG, value: List) -> bool:
-        ...
+    def set_config(self, key: LIST_CONFIG, value: List) -> bool: ...
 
     @overload
-    def set_config(self, key: DICT_CONFIG, value: Dict) -> bool:
-        ...
+    def set_config(self, key: DICT_CONFIG, value: Dict) -> bool: ...
 
-    def set_config(self, key: str, value: Union[str, List, Dict]) -> bool:
+    @overload
+    def set_config(self, key: INT_CONFIG, value: int) -> bool: ...
+
+    @overload
+    def set_config(self, key: BOOL_CONFIG, value: bool) -> bool: ...
+
+    def set_config(
+        self, key: str, value: Union[str, List, Dict, int, bool]
+    ) -> bool:
         if key in CONFIG_DEFAULT:
             # 设置值
             self.config[key] = value

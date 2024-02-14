@@ -11,19 +11,22 @@ from typing import (
     Awaitable,
 )
 
-from sqlalchemy.future import select
-from sqlalchemy import delete, update
-from sqlalchemy.orm import sessionmaker
-from sqlmodel import Field, SQLModel, col
-from sqlalchemy.sql.expression import func, null
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.sql.expression import func, null, true
+from sqlmodel import Field, SQLModel, col, and_, delete, select, update
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from gsuid_core.data_store import get_res_path
 
 T_BaseModel = TypeVar('T_BaseModel', bound='BaseModel')
 T_BaseIDModel = TypeVar('T_BaseIDModel', bound='BaseIDModel')
 T_User = TypeVar('T_User', bound='User')
+T_Bind = TypeVar('T_Bind', bound='Bind')
 T_Push = TypeVar('T_Push', bound='Push')
+T_Cache = TypeVar('T_Cache', bound='Cache')
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -31,7 +34,9 @@ DB_PATH = get_res_path() / 'GsData.db'
 db_url = str(DB_PATH)
 url = f'sqlite+aiosqlite:///{db_url}'
 engine = create_async_engine(url, pool_recycle=1500)
-async_maker = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+async_maker = async_sessionmaker(
+    engine, expire_on_commit=False, class_=AsyncSession
+)
 
 
 def with_session(
@@ -268,8 +273,7 @@ class BaseBotIDModel(BaseIDModel):
             return await cls.full_insert_data(bot_id=bot_id, **data)
 
         sql = update(cls).where(
-            getattr(cls, uid_name) == uid,
-            cls.bot_id == bot_id,
+            and_(getattr(cls, uid_name) == uid, cls.bot_id == bot_id)
         )
         if data is not None:
             query = sql.values(**data)
@@ -322,7 +326,7 @@ class BaseModel(BaseBotIDModel):
                 cls.user_id == user_id, cls.bot_id == bot_id
             )
         result = await session.execute(sql)
-        data = result.scalars().all()
+        data = result.scalars()._allrows()
         return data if data else None
 
     @classmethod
@@ -357,7 +361,11 @@ class BaseModel(BaseBotIDModel):
     @classmethod
     @with_session
     async def insert_data(
-        cls, session: AsyncSession, user_id: str, bot_id: str, **data
+        cls: Type[T_BaseModel],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+        **data,
     ) -> int:
         '''📝简单介绍:
 
@@ -382,7 +390,12 @@ class BaseModel(BaseBotIDModel):
 
             🔸`int`: 恒为0
         '''
-        if await cls.data_exist(user_id=user_id, bot_id=bot_id):
+        cond = {'user_id': user_id, 'bot_id': bot_id}
+        if 'mys_id' in data:
+            cond['mys_id'] = data['mys_id']
+        elif 'uid' in data:
+            cond['uid'] = data['uid']
+        if await cls.data_exist(**cond):
             await cls.update_data(user_id, bot_id, **data)
         else:
             session.add(cls(user_id=user_id, bot_id=bot_id, **data))
@@ -392,7 +405,11 @@ class BaseModel(BaseBotIDModel):
     @classmethod
     @with_session
     async def delete_data(
-        cls, session: AsyncSession, user_id: str, bot_id: str, **data
+        cls: Type[T_BaseModel],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+        **data,
     ) -> int:
         '''📝简单介绍:
 
@@ -421,7 +438,11 @@ class BaseModel(BaseBotIDModel):
     @classmethod
     @with_session
     async def update_data(
-        cls, session: AsyncSession, user_id: str, bot_id: str, **data
+        cls: Type[T_BaseModel],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+        **data,
     ) -> int:
         '''📝简单介绍:
 
@@ -446,7 +467,9 @@ class BaseModel(BaseBotIDModel):
 
             🔸`int`: 成功为0, 失败为-1（未找到数据则无法更新）
         '''
-        sql = update(cls).where(cls.user_id == user_id, cls.bot_id == bot_id)
+        sql = update(cls).where(
+            and_(cls.user_id == user_id, cls.bot_id == bot_id)
+        )
         if data is not None:
             query = sql.values(**data)
             query.execution_options(synchronize_session='fetch')
@@ -464,7 +487,7 @@ class Bind(BaseModel):
     ################################
     @classmethod
     async def get_uid_list_by_game(
-        cls,
+        cls: Type[T_Bind],
         user_id: str,
         bot_id: str,
         game_name: Optional[str] = None,
@@ -509,7 +532,7 @@ class Bind(BaseModel):
 
     @classmethod
     async def get_uid_by_game(
-        cls,
+        cls: Type[T_Bind],
         user_id: str,
         bot_id: str,
         game_name: Optional[str] = None,
@@ -544,7 +567,7 @@ class Bind(BaseModel):
 
     @classmethod
     async def bind_exists(
-        cls,
+        cls: Type[T_Bind],
         user_id: str,
         bot_id: str,
     ) -> bool:
@@ -555,7 +578,7 @@ class Bind(BaseModel):
 
     @classmethod
     async def insert_uid(
-        cls,
+        cls: Type[T_Bind],
         user_id: str,
         bot_id: str,
         uid: str,
@@ -607,11 +630,13 @@ class Bind(BaseModel):
         '''
         result = await cls.get_uid_list_by_game(user_id, bot_id, game_name)
 
+        result = [i for i in result if i] if result else None
+
         if lenth_limit:
             if len(uid) != lenth_limit:
                 return -1
 
-        if is_digit is not None:
+        if is_digit:
             if not uid.isdigit():
                 return -3
         if not uid:
@@ -639,7 +664,7 @@ class Bind(BaseModel):
 
     @classmethod
     async def delete_uid(
-        cls,
+        cls: Type[T_Bind],
         user_id: str,
         bot_id: str,
         uid: str,
@@ -681,7 +706,10 @@ class Bind(BaseModel):
             return -1
 
         result.remove(uid)
+
+        result = [i for i in result if i] if result else []
         new_uid = '_'.join(result)
+
         await cls.update_data(
             user_id,
             bot_id,
@@ -692,7 +720,7 @@ class Bind(BaseModel):
     @classmethod
     @with_session
     async def get_all_uid_list_by_game(
-        cls,
+        cls: Type[T_Bind],
         session: AsyncSession,
         bot_id: str,
         game_name: Optional[str] = None,
@@ -719,7 +747,7 @@ class Bind(BaseModel):
         '''
         sql = select(cls).where(cls.bot_id == bot_id)
         result = await session.execute(sql)
-        data: List["Bind"] = result.scalars().all()
+        data = result.scalars()._allrows()
         uid_list: List[str] = []
         for item in data:
             uid = getattr(item, cls.get_gameid_name(game_name))
@@ -730,7 +758,7 @@ class Bind(BaseModel):
 
     @classmethod
     async def switch_uid_by_game(
-        cls,
+        cls: Type[T_Bind],
         user_id: str,
         bot_id: str,
         uid: Optional[str] = None,
@@ -797,20 +825,26 @@ class Bind(BaseModel):
         return 0
 
     @classmethod
-    async def get_bind_group_list(cls, user_id: str, bot_id: str) -> List[str]:
+    async def get_bind_group_list(
+        cls: Type[T_Bind], user_id: str, bot_id: str
+    ) -> List[str]:
         '''获取传入`user_id`和`bot_id`对应的绑定群列表'''
         data: Optional["Bind"] = await cls.select_data(user_id, bot_id)
         return data.group_id.split("_") if data and data.group_id else []
 
     @classmethod
-    async def get_bind_group(cls, user_id: str, bot_id: str) -> Optional[str]:
+    async def get_bind_group(
+        cls: Type[T_Bind], user_id: str, bot_id: str
+    ) -> Optional[str]:
         '''获取传入`user_id`和`bot_id`对应的绑定群（如多个则返回第一个）'''
         data = await cls.get_bind_group_list(user_id, bot_id)
         return data[0] if data else None
 
     @classmethod
     @with_session
-    async def get_group_all_uid(cls, session: AsyncSession, group_id: str):
+    async def get_group_all_uid(
+        cls: Type[T_Bind], session: AsyncSession, group_id: str
+    ):
         '''根据传入`group_id`获取该群号下所有绑定`uid`列表'''
         result = await session.scalars(
             select(cls).where(col(cls.group_id).contains(group_id))
@@ -884,12 +918,12 @@ class User(BaseModel):
         result = await session.execute(
             select(cls).where(cls.user_id == user_id)
         )
-        data = result.scalars().all()
+        data = result.scalars()._allrows()
         return data if data else None
 
     @classmethod
     async def get_user_attr(
-        cls,
+        cls: Type[T_User],
         user_id: str,
         bot_id: str,
         attr: str,
@@ -922,7 +956,7 @@ class User(BaseModel):
 
     @classmethod
     async def get_user_attr_by_uid(
-        cls,
+        cls: Type[T_User],
         uid: str,
         attr: str,
         game_name: Optional[str] = None,
@@ -936,7 +970,7 @@ class User(BaseModel):
 
     @classmethod
     async def get_user_attr_by_user_id(
-        cls,
+        cls: Type[T_User],
         user_id: str,
         attr: str,
     ) -> Optional[Any]:
@@ -949,19 +983,25 @@ class User(BaseModel):
 
     @classmethod
     @with_session
-    async def mark_invalid(cls, session: AsyncSession, cookie: str, mark: str):
+    async def mark_invalid(
+        cls: Type[T_User], session: AsyncSession, cookie: str, mark: str
+    ):
         '''令一个cookie所对应数据的`status`值为传入的mark
 
         例如：mark值可以是`error`, 标记该Cookie已失效
         '''
-        sql = update(cls).where(cls.cookie == cookie).values(status=mark)
+        sql = (
+            update(cls)
+            .where(and_(cls.cookie == cookie, true()))
+            .values(status=mark)
+        )
         await session.execute(sql)
         await session.commit()
         return True
 
     @classmethod
     async def get_user_cookie_by_uid(
-        cls, uid: str, game_name: Optional[str] = None
+        cls: Type[T_User], uid: str, game_name: Optional[str] = None
     ) -> Optional[str]:
         '''根据传入的`uid`选择数据实例，然后返回该数据的`cookie`值
 
@@ -971,7 +1011,7 @@ class User(BaseModel):
 
     @classmethod
     async def get_user_cookie_by_user_id(
-        cls, user_id: str, bot_id: str
+        cls: Type[T_User], user_id: str, bot_id: str
     ) -> Optional[str]:
         '''根据传入的`user_id`选择数据实例，然后返回该数据的`cookie`值
 
@@ -981,7 +1021,7 @@ class User(BaseModel):
 
     @classmethod
     async def get_user_stoken_by_uid(
-        cls, uid: str, game_name: Optional[str] = None
+        cls: Type[T_User], uid: str, game_name: Optional[str] = None
     ) -> Optional[str]:
         '''根据传入的`uid`选择数据实例，然后返回该数据的`stoken`值
 
@@ -991,7 +1031,7 @@ class User(BaseModel):
 
     @classmethod
     async def get_user_stoken_by_user_id(
-        cls, user_id: str, bot_id: str
+        cls: Type[T_User], user_id: str, bot_id: str
     ) -> Optional[str]:
         '''根据传入的`user_id`选择数据实例，然后返回该数据的`stoken`值
 
@@ -1001,7 +1041,7 @@ class User(BaseModel):
 
     @classmethod
     async def cookie_validate(
-        cls, uid: str, game_name: Optional[str] = None
+        cls: Type[T_User], uid: str, game_name: Optional[str] = None
     ) -> bool:
         '''根据传入的`uid`选择数据实例, 校验数据中的`cookie`是否有效
 
@@ -1042,9 +1082,9 @@ class User(BaseModel):
             🔸`List[T_User]`: 有效数据的列表, 如没有则为`[]`
         '''
         _switch = getattr(cls, switch_name, cls.push_switch)
-        sql = select(cls).filter(_switch != 'off')
+        sql = select(cls).filter(and_(_switch != 'off', true()))
         data = await session.execute(sql)
-        data_list: List[T_User] = data.scalars().all()
+        data_list: List[T_User] = data.scalars()._allrows()
         return [user for user in data_list]
 
     @classmethod
@@ -1078,7 +1118,7 @@ class User(BaseModel):
         else:
             sql = select(cls).where(cls.cookie != null(), cls.cookie != '')
         result = await session.execute(sql)
-        data = result.scalars().all()
+        data = result.scalars()._allrows()
         return data
 
     @classmethod
@@ -1183,7 +1223,7 @@ class User(BaseModel):
                     .order_by(func.random())
                 )
                 data = await session.execute(sql)
-                user_list: List[T_User] = data.scalars().all()
+                user_list: List[T_User] = data.scalars()._allrows()
                 break
             else:
                 user_list = await cls.get_all_user()
@@ -1228,20 +1268,23 @@ class Cache(BaseIDModel):
     @classmethod
     @with_session
     async def select_cache_cookie(
-        cls, session: AsyncSession, uid: str, game_name: Optional[str]
+        cls: Type[T_Cache],
+        session: AsyncSession,
+        uid: str,
+        game_name: Optional[str],
     ) -> Optional[str]:
         '''根据给定的`uid`获取表中存在缓存的`cookie`并返回'''
         sql = select(cls).where(
             getattr(cls, cls.get_gameid_name(game_name)) == uid
         )
         result = await session.execute(sql)
-        data: List["Cache"] = result.scalars().all()
+        data = result.scalars()._allrows()
         return data[0].cookie if len(data) >= 1 else None
 
     @classmethod
     @with_session
     async def delete_error_cache(
-        cls, session: AsyncSession, user: Type["User"]
+        cls: Type[T_Cache], session: AsyncSession, user: Type["User"]
     ) -> bool:
         '''根据给定的`user`模型中, 查找该模型所有数据的status
 
@@ -1253,7 +1296,7 @@ class Cache(BaseIDModel):
         '''
         data = await user.get_all_error_cookie()
         for cookie in data:
-            sql = delete(cls).where(cls.cookie == cookie)
+            sql = delete(cls).where(and_(cls.cookie == cookie, true()))
             await session.execute(sql)
         return True
 
@@ -1270,7 +1313,12 @@ class Cache(BaseIDModel):
 
         清除`User`表中该类cookie的status, 令其重新为`None`
         '''
-        sql = update(user).where(user.status == 'limit30').values(status=None)
+        sql = (
+            update(user)
+            .where(and_(user.status == 'limit30'))
+            .values(status=None)
+            .execution_options(synchronize_session="fetch")
+        )
         empty_sql = delete(cls)
         await session.execute(sql)
         await session.execute(empty_sql)

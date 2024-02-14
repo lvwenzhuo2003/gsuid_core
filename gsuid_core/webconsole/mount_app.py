@@ -44,9 +44,12 @@ from gsuid_core.utils.cookie_manager.add_ck import _deal_ck
 from gsuid_core.webconsole.html import gsuid_webconsole_help
 from gsuid_core.webconsole.create_sv_panel import get_sv_page
 from gsuid_core.version import __version__ as GenshinUID_version
+from gsuid_core.webconsole.create_log_panel import create_log_page
 from gsuid_core.webconsole.create_task_panel import get_tasks_panel
 from gsuid_core.webconsole.create_config_panel import get_config_page
+from gsuid_core.webconsole.create_analysis_panel import get_analysis_page
 from gsuid_core.utils.database.models import GsBind, GsPush, GsUser, GsCache
+from gsuid_core.webconsole.create_core_config_panel import get_core_config_page
 from gsuid_core.webconsole.login_page import (  # noqa  # 不要删
     AuthRouter,
     amis_admin,
@@ -106,9 +109,11 @@ class GsUserRegFormAdmin(UserRegFormAdmin):
     def route_submit(self):
         async def route(
             response: Response,
-            result: BaseApiOut = Depends(super().route_submit),
+            result: BaseApiOut = Depends(super().route_submit),  # type: ignore
         ):
-            if result.status == 0 and result.code == 0:  # 登录成功,设置用户信息
+            if (
+                result.status == 0 and result.code == 0
+            ):  # 登录成功,设置用户信息
                 response.set_cookie(
                     'Authorization', f'bearer {result.data.access_token}'  # type: ignore
                 )
@@ -159,12 +164,13 @@ class GsAuthAdminSite(AuthAdminSite):
 
 settings = Settings(
     database_url_async=f'sqlite+aiosqlite:///{db_url}',
-    database_url='',
     site_path='/genshinuid',
     site_icon='https://s2.loli.net/2022/01/31/kwCIl3cF1Z2GxnR.png',
     site_title='GsCore - 网页控制台',
     language='zh_CN',
     amis_theme='ang',
+    amis_cdn='https://npm.onmicrosoft.cn/',
+    amis_pkg="amis@6.0.0",
 )
 
 
@@ -291,7 +297,9 @@ class UserBindFormAdmin(GsNormalForm):
             im = await _deal_ck(data.bot_id, data.cookie, data.user_id)
         except Exception as e:
             logger.warning(e)
-            return BaseApiOut(status=-1, msg='你输入的CK可能已经失效/或者该用户ID未绑定UID')
+            return BaseApiOut(
+                status=-1, msg='你输入的CK可能已经失效/或者该用户ID未绑定UID'
+            )
         ok_num = im.count('成功')
         if ok_num < 1:
             return BaseApiOut(status=-1, msg=im)
@@ -409,9 +417,37 @@ class MyHomeAdmin(admin.HomeAdmin):
 
 
 @site.register_admin
+class AnalysisPage(GsAdminPage):
+    page_schema = PageSchema(
+        label=('数据统计'),
+        icon='fa fa-area-chart',
+        url='/Analysis',
+        isDefaultPage=True,
+        sort=100,
+    )  # type: ignore
+
+    async def get_page(self, request: Request) -> Page:
+        return Page.parse_obj(await get_analysis_page())
+
+
+@site.register_admin
+class CoreManagePage(GsAdminPage):
+    page_schema = PageSchema(
+        label=('Core配置'),
+        icon='fa fa-sliders',
+        url='/CoreManage',
+        isDefaultPage=True,
+        sort=100,
+    )  # type: ignore
+
+    async def get_page(self, request: Request) -> Page:
+        return Page.parse_obj(get_core_config_page())
+
+
+@site.register_admin
 class SVManagePage(GsAdminPage):
     page_schema = PageSchema(
-        label=('功能配置'),
+        label=('功能服务配置'),
         icon='fa fa-sliders',
         url='/SvManage',
         isDefaultPage=True,
@@ -425,7 +461,7 @@ class SVManagePage(GsAdminPage):
 @site.register_admin
 class ConfigManagePage(GsAdminPage):
     page_schema = PageSchema(
-        label=('修改设定'),
+        label=('修改插件设定'),
         icon='fa fa-cogs',
         url='/ConfigManage',
         isDefaultPage=True,
@@ -448,6 +484,20 @@ class PluginsManagePage(GsAdminPage):
 
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(get_tasks_panel())
+
+
+@site.register_admin
+class LogsPage(GsAdminPage):
+    page_schema = PageSchema(
+        label=('实时日志'),
+        icon='fa fa-columns',
+        url='/logs',
+        isDefaultPage=True,
+        sort=100,
+    )  # type: ignore
+
+    async def get_page(self, request: Request) -> Page:
+        return Page.parse_obj(create_log_page())
 
 
 # 取消注册默认管理类

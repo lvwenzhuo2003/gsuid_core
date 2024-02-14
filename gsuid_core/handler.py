@@ -7,12 +7,21 @@ from gsuid_core.bot import Bot, _Bot
 from gsuid_core.logger import logger
 from gsuid_core.trigger import Trigger
 from gsuid_core.config import core_config
-from gsuid_core.global_val import global_val
+from gsuid_core.global_val import get_global_val
 from gsuid_core.models import Event, Message, MessageReceive
+from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
 
 command_start = core_config.get_config('command_start')
+enable_empty = core_config.get_config('enable_empty_start')
 config_masters = core_config.get_config('masters')
 config_superusers = core_config.get_config('superusers')
+
+shield_list = core_plugins_config.get_config('ShieldQQBot').data
+
+if command_start and enable_empty:
+    _command_start: List[str] = [*command_start] + ['']
+else:
+    _command_start: List[str] = command_start
 
 
 async def get_user_pml(msg: MessageReceive) -> int:
@@ -51,8 +60,8 @@ async def msg_process(msg: MessageReceive) -> Event:
                 event.is_tome = True
                 continue
             else:
-                event.at = _msg.data
-                event.at_list.append(_msg.data)
+                event.at = str(_msg.data)
+                event.at_list.append(str(_msg.data))
         elif _msg.type == 'image':
             event.image = _msg.data
             event.image_list.append(_msg.data)
@@ -72,11 +81,21 @@ async def msg_process(msg: MessageReceive) -> Event:
 
 
 async def handle_event(ws: _Bot, msg: MessageReceive):
-    global_val['receive'] += 1
     # 获取用户权限，越小越高
     msg.user_pm = user_pm = await get_user_pml(msg)
     event = await msg_process(msg)
     logger.info('[收到事件]', event=event)
+
+    local_val = await get_global_val(event.real_bot_id, event.bot_self_id)
+    local_val['receive'] += 1
+
+    if event.at:
+        for shield_id in shield_list:
+            if event.at.startswith(shield_id):
+                logger.warning(
+                    '消息中疑似包含@机器人的消息, 停止响应本消息内容'
+                )
+                return
 
     gid = event.group_id if event.group_id else '0'
     uid = event.user_id if event.user_id else '0'
@@ -102,8 +121,8 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
             return
 
     is_start = False
-    if command_start and event.raw_text:
-        for start in command_start:
+    if _command_start and event.raw_text:
+        for start in _command_start:
             if event.raw_text.strip().startswith(start):
                 event.raw_text = event.raw_text.replace(start, '', 1)
                 is_start = True
@@ -123,14 +142,44 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
         for _type in SL.lst[sv].TL
         for tr in SL.lst[sv].TL[_type]
         if (
-            SL.lst[sv].enabled
+            SL.lst[sv].plugins.enabled
+            and user_pm <= SL.lst[sv].plugins.pm
+            and msg.group_id not in SL.lst[sv].plugins.black_list
+            and msg.user_id not in SL.lst[sv].plugins.black_list
+            and (
+                True
+                if SL.lst[sv].plugins.area == 'SV'
+                or SL.lst[sv].plugins.area == 'ALL'
+                or (
+                    event.user_type == 'group'
+                    and SL.lst[sv].plugins.area == 'GROUP'
+                )
+                or (
+                    event.user_type == 'direct'
+                    and SL.lst[sv].plugins.area == 'DIRECT'
+                )
+                else False
+            )
+            and (
+                True
+                if (
+                    not SL.lst[sv].plugins.white_list
+                    or SL.lst[sv].plugins.white_list == ['']
+                )
+                else (
+                    msg.user_id in SL.lst[sv].plugins.white_list
+                    or msg.group_id in SL.lst[sv].plugins.white_list
+                )
+            )
+            and SL.lst[sv].enabled
             and user_pm <= SL.lst[sv].pm
             and msg.group_id not in SL.lst[sv].black_list
             and msg.user_id not in SL.lst[sv].black_list
             and (
                 True
                 if SL.lst[sv].area == 'ALL'
-                or (msg.group_id and SL.lst[sv].area == 'GROUP')
+                or (SL.lst[sv].plugins.area == 'ALL')
+                or (event.user_type == 'group' and SL.lst[sv].area == 'GROUP')
                 or (
                     event.user_type == 'direct' and SL.lst[sv].area == 'DIRECT'
                 )
@@ -167,15 +216,24 @@ async def handle_event(ws: _Bot, msg: MessageReceive):
 
 
 async def count_data(event: Event, trigger: Trigger):
-    global_val['command'] += 1
+    local_val = await get_global_val(event.real_bot_id, event.bot_self_id)
+    local_val['command'] += 1
     if event.group_id:
-        if event.group_id not in global_val['group']:
-            global_val['group'][event.group_id] = {}
+        if event.group_id not in local_val['group']:
+            local_val['group'][event.group_id] = {}
 
-        if trigger.keyword not in global_val['group'][event.group_id]:
-            global_val['group'][event.group_id][trigger.keyword] = 0
+        if trigger.keyword not in local_val['group'][event.group_id]:
+            local_val['group'][event.group_id][trigger.keyword] = 1
         else:
-            global_val['group'][event.group_id][trigger.keyword] += 1
+            local_val['group'][event.group_id][trigger.keyword] += 1
+
+    if event.user_id:
+        if event.user_id not in local_val['user']:
+            local_val['user'][event.user_id] = {}
+        if trigger.keyword not in local_val['user'][event.user_id]:
+            local_val['user'][event.user_id][trigger.keyword] = 1
+        else:
+            local_val['user'][event.user_id][trigger.keyword] += 1
 
 
 async def _check_command(

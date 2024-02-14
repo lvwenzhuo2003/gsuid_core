@@ -58,7 +58,13 @@ async def get_resp_msg(bot: Bot, ev: Event):
     while True:
         resp = await bot.receive_resp(
             '请选择一个选项!',
-            ['🎨可爱的丛林', '🚀遥远的星空', '📝不如在家写作业', '✨或者看星星', '🚧这里是维护选项'],
+            [
+                '🎨可爱的丛林',
+                '🚀遥远的星空',
+                '📝不如在家写作业',
+                '✨或者看星星',
+                '🚧这里是维护选项',
+            ],
         )
         if resp is not None:
             await bot.send(f'你输入的是{resp.text}')
@@ -120,3 +126,8 @@ async def send_temp_button_msg(bot: Bot, ev: Event):
 
     buttons = [ab, bb, cb, db, eb, fb, gb, hb, ib, jb]
     await bot.send_option('测试', buttons)
+
+
+@sv_switch.on_message()
+async def handle_any(bot: Bot, ev: Event):
+    await bot.send(f'收到消息啦 -> {ev.text}')

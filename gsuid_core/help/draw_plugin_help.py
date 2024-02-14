@@ -61,6 +61,10 @@ async def get_help(
     text_color: Tuple[int, int, int] = (250, 250, 250),
     sub_c: Optional[Tuple[int, int, int]] = None,
     op_color: Optional[Tuple[int, int, int]] = None,
+    title_color: Tuple[int, int, int] = (250, 250, 250),
+    sub_title_color: Tuple[int, int, int] = (235, 235, 235),
+    sv_color: Tuple[int, int, int] = (250, 250, 250),
+    sv_desc_color: Tuple[int, int, int] = (235, 235, 235),
     column: int = 5,
     is_gaussian: bool = False,
     gaussian_blur: int = 20,
@@ -75,14 +79,22 @@ async def get_help(
         return await convert_img(Image.open(help_path))
 
     if sub_c is None and is_dark:
-        sub_c = tuple(x - 50 for x in text_color if x > 50)  # type: ignore
+        sub_c = tuple(
+            x - 50 if x > 50 else x for x in text_color
+        )  # type: ignore
     elif sub_c is None and not is_dark:
-        sub_c = tuple(x + 50 for x in text_color if x < 205)  # type: ignore
+        sub_c = tuple(
+            x + 50 if x < 205 else x for x in text_color
+        )  # type: ignore
 
     if op_color is None and is_dark:
-        op_color = tuple(x - 90 for x in text_color if x > 90)  # type: ignore
+        op_color = tuple(
+            x - 90 if x > 90 else x for x in text_color
+        )  # type: ignore
     elif op_color is None and not is_dark:
-        op_color = tuple(x + 90 for x in text_color if x < 160)  # type: ignore
+        op_color = tuple(
+            x + 90 if x < 160 else x for x in text_color
+        )  # type: ignore
 
     _h = 600
 
@@ -111,8 +123,10 @@ async def get_help(
             title.paste(badge_s, (_x, 556), badge_s)
             title_draw.text((_x + 360, 596), message, sub_c, font(26), 'mm')
 
-    title_draw.text((cx(w, 0), 440), f'{name} 帮助', text_color, font(36), 'mm')
-    title_draw.text((cx(w, 0), 520), sub_text, sub_c, font(26), 'mm')
+    title_draw.text(
+        (cx(w, 0), 440), f'{name} 帮助', title_color, font(36), 'mm'
+    )
+    title_draw.text((cx(w, 0), 520), sub_text, sub_title_color, font(26), 'mm')
 
     if is_dark:
         icon_mask = Image.new('RGBA', (36, 36), (255, 255, 255))
@@ -132,7 +146,7 @@ async def get_help(
 
         bc = deepcopy(banner)
         bc_draw = ImageDraw.Draw(bc)
-        bc_draw.text((30, 25), sv_name, text_color, font(35), 'lm')
+        bc_draw.text((30, 25), sv_name, sv_color, font(35), 'lm')
 
         if hasattr(font, 'getsize'):
             size, _ = font(35).getsize(sv_name)  # type: ignore
@@ -140,7 +154,7 @@ async def get_help(
             bbox = font(35).getbbox(sv_name)
             size, _ = bbox[2] - bbox[0], bbox[3] - bbox[1]
 
-        bc_draw.text((42 + size, 30), sv_desc, sub_c, font(20), 'lm')
+        bc_draw.text((42 + size, 30), sv_desc, sv_desc_color, font(20), 'lm')
         sv_img.paste(bc, (0, 10), bc)
         # sv_img = easy_alpha_composite(sv_img, bc, (0, 10))
 

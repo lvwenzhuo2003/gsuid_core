@@ -1,9 +1,19 @@
 from typing import List, Literal
 
 from gsuid_core.sv import SL
+from gsuid_core.webconsole.create_base_panel import (
+    get_tab,
+    get_tabs,
+    get_alert,
+    get_empty,
+    get_divider,
+    get_input_tag,
+    get_grid_panel,
+)
 
 
 def get_sv_panel(
+    API: str = '/genshinuid/setSV',
     name: str = '',
     pm: int = 3,
     priority: int = 5,
@@ -12,7 +22,16 @@ def get_sv_panel(
     black_list: List = [],
     white_list: List = [],
 ):
-    api = f'/genshinuid/setSV/{name}'
+    api = f'{API}/{name}'
+
+    area_options = [
+        {'label': '全局', 'value': 'ALL'},
+        {'label': '仅限私聊', 'value': 'DIRECT'},
+        {'label': '仅限群聊', 'value': 'GROUP'},
+    ]
+    if API == '/genshinuid/setPlugins':
+        area_options.append({'label': '按照服务设定', 'value': 'SV'})
+
     card = {
         "type": "service",
         "body": {
@@ -117,7 +136,10 @@ def get_sv_panel(
                                         {'label': '群主', 'value': '2'},
                                         {'label': '管理员', 'value': '3'},
                                         {'label': '频道管理员', 'value': '4'},
-                                        {'label': '子频道管理员', 'value': '5'},
+                                        {
+                                            'label': '子频道管理员',
+                                            'value': '5',
+                                        },
                                         {'label': '正常人', 'value': '6'},
                                         {'label': '权限极低', 'value': '7'},
                                         {'label': '黑名单', 'value': '8'},
@@ -173,11 +195,7 @@ def get_sv_panel(
                                     'type': 'select',
                                     'label': '作用范围',
                                     'name': 'area',
-                                    'options': [
-                                        {'label': '全局', 'value': 'ALL'},
-                                        {'label': '仅限私聊', 'value': 'DIRECT'},
-                                        {'label': '仅限群聊', 'value': 'GROUP'},
-                                    ],
+                                    'options': area_options,
                                     'id': 'u:88e66f806556',
                                     'multiple': False,
                                     'value': area,
@@ -212,13 +230,9 @@ def get_sv_panel(
                             'type': 'container',
                             'size': 'xs',
                             'body': [
-                                {
-                                    'type': 'input-text',
-                                    'label': '黑名单（以;为分割）',
-                                    'name': 'black_list',
-                                    'id': 'u:ab168d425936',
-                                    'value': ';'.join(black_list),
-                                }
+                                get_input_tag(
+                                    '黑名单', 'black_list', black_list, []
+                                )
                             ],
                             'wrapperBody': False,
                             'style': {'flex': '0 0 auto', 'display': 'block'},
@@ -239,13 +253,9 @@ def get_sv_panel(
                             'type': 'container',
                             'size': 'xs',
                             'body': [
-                                {
-                                    'type': 'input-text',
-                                    'label': '白名单（以;为分割）',
-                                    'name': 'white_list',
-                                    'id': 'u:ab168d425936',
-                                    'value': ';'.join(white_list),
-                                }
+                                get_input_tag(
+                                    '白名单', 'white_list', white_list, []
+                                )
                             ],
                             'wrapperBody': False,
                             'style': {'flex': '0 0 auto', 'display': 'block'},
@@ -262,7 +272,7 @@ def get_sv_panel(
             'actions': [
                 {
                     'type': 'button',
-                    'label': '确认修改',
+                    'label': '✅ 确认修改',
                     'id': 'u:5784cfaa5c0a',
                     'actionType': 'ajax',
                     'api': api,
@@ -297,21 +307,56 @@ def get_sv_panel(
 def get_sv_page():
     page = {
         'type': 'page',
-        'title': '功能管理',
+        'title': '功能服务配置',
         'body': [],
         'id': 'u:a9be7e0dc676',
     }
-    for sv_name in SL.lst:
-        sv = SL.lst[sv_name]
-        panel = get_sv_panel(
-            sv.name,
-            sv.pm,
-            sv.priority,
-            sv.enabled,
-            sv.area,  # type:ignore
-            sv.black_list,
-            sv.white_list,
+    tabs = []
+    for plugins in SL.detail_lst:
+        sv_list = SL.detail_lst[plugins]
+        panels = []
+        grids = []
+        grids.append(
+            get_alert('该设定卡片为总设定，以下服务的触发均需满足总设定条件')
         )
-        page['body'].append(panel)
-
+        grids.append(
+            get_sv_panel(
+                '/genshinuid/setPlugins',
+                plugins.name,
+                plugins.pm,
+                plugins.priority,
+                plugins.enabled,
+                plugins.area,  # type:ignore
+                plugins.black_list,
+                plugins.white_list,
+            )
+        )
+        grids.append(get_divider())
+        grids.append(
+            get_alert('以下设定卡片为服务设定，控制单个服务的触发条件')
+        )
+        for sv in sv_list:
+            panel = get_sv_panel(
+                '/genshinuid/setSV',
+                sv.name,
+                sv.pm,
+                sv.priority,
+                sv.enabled,
+                sv.area,  # type:ignore
+                sv.black_list,
+                sv.white_list,
+            )
+            panels.append(panel)
+            if len(panels) == 2:
+                grids.append(get_grid_panel(panels))
+                panels = []
+        else:
+            if panels != []:
+                panels.append(get_empty())
+                grids.append(get_grid_panel(panels))
+                panels = []
+        tabs.append(get_tab(plugins.name, grids))
+        grids = []
+    tabs = get_tabs(tabs)
+    page['body'].append(tabs)
     return page

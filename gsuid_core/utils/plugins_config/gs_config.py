@@ -79,8 +79,14 @@ class StringConfig:
             )
         # 对没有的值，添加默认值
         for key in self.config_list:
+            _defalut = self.config_list[key]
             if key not in self.config:
-                self.config[key] = self.config_list[key]
+                self.config[key] = _defalut
+            else:
+                if isinstance(_defalut, GsStrConfig) or isinstance(
+                    _defalut, GsListStrConfig
+                ):
+                    self.config[key].options = _defalut.options  # type: ignore
 
         # 对默认值没有的值，直接删除
         delete_keys = []
@@ -112,11 +118,17 @@ class StringConfig:
             if isinstance(default_value, str):
                 return GsStrConfig('缺省值', '获取错误的配置项', default_value)
             elif isinstance(default_value, bool):
-                return GsBoolConfig('缺省值', '获取错误的配置项', default_value)
+                return GsBoolConfig(
+                    '缺省值', '获取错误的配置项', default_value
+                )
             elif isinstance(default_value, List):
-                return GsListStrConfig('缺省值', '获取错误的配置项', default_value)
+                return GsListStrConfig(
+                    '缺省值', '获取错误的配置项', default_value
+                )
             elif isinstance(default_value, Dict):
-                return GsDictConfig('缺省值', '获取错误的配置项', default_value)
+                return GsDictConfig(
+                    '缺省值', '获取错误的配置项', default_value
+                )
             else:
                 return GsBoolConfig('缺省值', '获取错误的配置项', False)
 
@@ -147,7 +159,9 @@ core_plugins_config = StringConfig(
 )
 
 pic_upload_config = StringConfig(
-    'GsCore图片上传', get_res_path() / 'pic_upload_config.json', PIC_UPLOAD_CONIFG
+    'GsCore图片上传',
+    get_res_path() / 'pic_upload_config.json',
+    PIC_UPLOAD_CONIFG,
 )
 
 send_pic_config = StringConfig(

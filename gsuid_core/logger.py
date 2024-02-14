@@ -1,14 +1,21 @@
 import sys
+import asyncio
 import logging
 import datetime
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import loguru
 
 from gsuid_core.config import core_config
 from gsuid_core.models import Event, Message
 from gsuid_core.data_store import get_res_path
+
+is_clear: bool = False
+is_RL: bool = False
+log_history = []
+LOG_PATH = get_res_path() / 'logs'
+
 
 if TYPE_CHECKING:
     # avoid sphinx autodoc resolve annotation failed
@@ -98,21 +105,86 @@ def format_event(record):
     time = '<g>{time:MM-DD HH:mm:ss}</g>'
     level = '[<lvl>{level}</lvl>]'
     def_name = f'<c><u>{".".join(def_name.split(".")[-5:])}</u></c>'
-    return f'{time} {level} {def_name} | {message} \n'
+    _log = f'{time} {level} {def_name} | {message} \n'
+    return _log
+
+
+def std_format_event(record):
+    try:
+        data = format_event(record)
+        if is_RL:
+            _data = data.format_map(record)
+            _data = (
+                _data.replace('<g>', '\033[37m')
+                .replace('</g>', '\033[0m')
+                .replace('<c><u>', '\033[34m')
+                .replace('</u></c>', '\033[0m')
+                .replace('<m><b>', '\033[35m')
+                .replace('</b></m>', '\033[0m')
+                .replace('<c><b>', '\033[32m')
+                .replace('</b></c>', '\033[0m')
+                .replace('<lvl>', '')
+                .replace('</lvl>', '')
+            )
+            log_history.append(_data.format_map(record))
+        return data
+    except:  # noqa: E722
+        return 'UnknowLog'
 
 
 LEVEL: str = core_config.get_config('log').get('level', 'INFO')
+logger_list: List[str] = core_config.get_config('log').get(
+    'output',
+    ['stdout', 'stderr', 'file'],
+)
 
 logger.remove()
-logger_id = logger.add(
-    sys.stdout, level=LEVEL, diagnose=False, format=format_event
-)
 
-logger.add(
-    sink=get_res_path() / 'logs/{time:YYYY-MM-DD}.log',
-    format=format_event,
-    rotation=datetime.time(),
-    level=LEVEL,
-    diagnose=False,
-    # backtrace=False,
-)
+if 'stdout' in logger_list:
+    logger_id = logger.add(
+        sys.stdout,
+        level=LEVEL,
+        diagnose=True,
+        backtrace=True,
+        filter=lambda record: record["level"].no < 40,
+        format=std_format_event,
+    )
+
+if 'stderr' in logger_list:
+    logger.add(sys.stderr, level="ERROR")
+
+if 'file' in logger_list:
+    logger.add(
+        sink=LOG_PATH / '{time:YYYY-MM-DD}.log',
+        format=format_event,
+        rotation=datetime.time(),
+        level=LEVEL,
+        diagnose=True,
+        backtrace=True,
+    )
+
+
+async def read_log():
+    global log_history
+    global is_RL
+    is_RL = True
+    index = 0
+    while True:
+        if index <= len(log_history) - 1:
+            yield log_history[index]
+            index += 1
+        else:
+            await asyncio.sleep(1)
+
+
+async def clear_log():
+    global is_clear
+    global log_history
+
+    if is_clear:
+        return
+
+    is_clear = True
+    await asyncio.sleep(18000)
+    log_history = []
+    is_clear = False

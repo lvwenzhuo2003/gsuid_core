@@ -11,23 +11,19 @@ from gsuid_core.utils.image.image_tools import draw_center_text_by_line
 
 
 @overload
-async def convert_img(img: Image.Image, is_base64: bool = False) -> bytes:
-    ...
+async def convert_img(img: Image.Image, is_base64: bool = False) -> bytes: ...
 
 
 @overload
-async def convert_img(img: Image.Image, is_base64: bool = True) -> str:
-    ...
+async def convert_img(img: Image.Image, is_base64: bool = True) -> str: ...
 
 
 @overload
-async def convert_img(img: bytes, is_base64: bool = False) -> str:
-    ...
+async def convert_img(img: bytes, is_base64: bool = False) -> str: ...
 
 
 @overload
-async def convert_img(img: Path, is_base64: bool = False) -> str:
-    ...
+async def convert_img(img: Path, is_base64: bool = False) -> str: ...
 
 
 async def convert_img(
@@ -118,16 +114,22 @@ def get_height(content: str, size: int) -> int:
     return (line_count + 1) * size
 
 
-async def text2pic(text: str, max_size: int = 600, font_size: int = 24):
+async def text2pic(text: str, max_size: int = 800, font_size: int = 24):
     if text.endswith('\n'):
         text = text[:-1]
 
     img = Image.new(
-        'RGB', (max_size, len(text) * font_size // 5), (228, 222, 210)
+        'RGB', (max_size, len(text) * font_size // 3), (255, 255, 255)
     )
     img_draw = ImageDraw.ImageDraw(img)
     y = draw_center_text_by_line(
-        img_draw, (50, 0), text, core_font(font_size), 'black', 500, True
+        img_draw,
+        (50, 50),
+        text,
+        core_font(font_size),
+        'black',
+        max_size - 80,
+        True,
     )
-    img = img.crop((0, 0, 600, int(y + 30)))
+    img = img.crop((0, 0, max_size, int(y + 80)))
     return await convert_img(img)

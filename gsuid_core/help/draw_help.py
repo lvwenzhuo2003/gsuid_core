@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple, Union, Optional
 
 from PIL import Image, ImageDraw
 
-from gsuid_core.sv import SV
+from gsuid_core.sv import SV, Plugins
 
 # from gsuid_core.utils.image.image_tools import get_color_bg
 from gsuid_core.utils.fonts.fonts import core_font
@@ -22,6 +22,7 @@ tag_color = {
     'fullmatch': (228, 124, 124),
     'regex': (225, 228, 124),
     'command': (228, 124, 124),
+    'message': (176, 150, 198),
     'other': (228, 190, 191),
 }
 
@@ -33,6 +34,7 @@ tag_text: Dict[str, str] = {
     'fullmatch': '完全',
     'regex': '正则',
     'command': '命令',
+    'message': '消息',
     'other': '其他',
 }
 
@@ -45,6 +47,7 @@ tags: Dict[str, Optional[Image.Image]] = {
     'regex': None,
     'command': None,
     'other': None,
+    'message': None,
 }
 
 
@@ -80,9 +83,7 @@ def _c(data: Union[int, str, bool]) -> Tuple[int, int, int]:
         color = (
             tag_color['prefix']
             if data == 'ALL'
-            else tag_color['command']
-            if data == 'GROUP'
-            else tag_color['file']
+            else tag_color['command'] if data == 'GROUP' else tag_color['file']
         )
     else:
         colors = list(tag_color.values())
@@ -97,17 +98,40 @@ def _t(data: Union[int, str, bool]) -> str:
     if isinstance(data, bool):
         text = '开启' if data else '关闭'
     elif isinstance(data, str):
-        text = '不限' if data == 'ALL' else '群聊' if data == 'GROUP' else '私聊'
+        text = (
+            '不限' if data == 'ALL' else '群聊' if data == 'GROUP' else '私聊'
+        )
     else:
-        texts = ['主人', '超管', '群主', '管理', '频管', '子管', '正常', '低', '黑']
+        texts = [
+            '主人',
+            '超管',
+            '群主',
+            '管理',
+            '频管',
+            '子管',
+            '正常',
+            '低',
+            '黑',
+        ]
         if data <= len(texts) and data >= 0:
-            text = ['主人', '超管', '群主', '管理', '频管', '子管', '正常', '低', '黑'][data]
+            text = [
+                '主人',
+                '超管',
+                '群主',
+                '管理',
+                '频管',
+                '子管',
+                '正常',
+                '低',
+                '黑',
+            ][data]
         else:
             text = '最低'
     return text
 
 
-def get_plugin_bg(plugin_name: str, sv_list: List[SV]):
+def get_plugin_bg(plugin: Plugins, sv_list: List[SV]):
+    plugin_name = plugin.name
     img_list: List[Image.Image] = []
 
     for sv in sv_list:
@@ -176,8 +200,8 @@ async def get_help_img() -> Image.Image:
 
     content = SL.detail_lst
     img_list: List[Image.Image] = []
-    for plugin_name in content:
-        plugin_img = get_plugin_bg(plugin_name, content[plugin_name])
+    for plugin in content:
+        plugin_img = get_plugin_bg(plugin, content[plugin])
         img_list.append(plugin_img)
 
     x = 900

@@ -1,6 +1,7 @@
 '''
 米游社 API 请求模块。
 '''
+
 from __future__ import annotations
 
 import copy
@@ -22,6 +23,7 @@ from typing import (
     overload,
 )
 
+import httpx
 from aiohttp import TCPConnector, ClientSession, ContentTypeError
 
 from gsuid_core.logger import logger
@@ -74,6 +76,7 @@ ssl_verify = core_plugins_config.get_config('MhySSLVerify').data
 RECOGNIZE_SERVER = {
     '1': 'cn_gf01',
     '2': 'cn_gf01',
+    '3': 'cn_gf01',
     '5': 'cn_qd01',
     '6': 'os_usa',
     '7': 'os_euro',
@@ -110,32 +113,26 @@ class BaseMysApi:
     dbsqla: DBSqla = DBSqla()
 
     @abstractmethod
-    async def _upass(self, header: Dict) -> str:
-        ...
+    async def _upass(self, header: Dict) -> str: ...
 
     @abstractmethod
     async def _pass(
         self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]:
-        ...
+    ) -> Tuple[Optional[str], Optional[str]]: ...
 
     @abstractmethod
     async def get_ck(
         self, uid: str, mode: Literal['OWNER', 'RANDOM'] = 'RANDOM'
-    ) -> Optional[str]:
-        ...
+    ) -> Optional[str]: ...
 
     @abstractmethod
-    async def get_stoken(self, uid: str) -> Optional[str]:
-        ...
+    async def get_stoken(self, uid: str) -> Optional[str]: ...
 
     @abstractmethod
-    async def get_user_fp(self, uid: str) -> Optional[str]:
-        ...
+    async def get_user_fp(self, uid: str) -> Optional[str]: ...
 
     @abstractmethod
-    async def get_user_device_id(self, uid: str) -> Optional[str]:
-        ...
+    async def get_user_device_id(self, uid: str) -> Optional[str]: ...
 
     def get_device_id(self) -> str:
         device_id = str(uuid.uuid4()).lower()
@@ -338,14 +335,12 @@ class BaseMysApi:
     @overload
     async def ck_in_new_device(
         self, uid: str, app_cookie: str
-    ) -> Tuple[str, str, str, str]:
-        ...
+    ) -> Tuple[str, str, str, str]: ...
 
     @overload
     async def ck_in_new_device(
         self, uid: str, app_cookie: Optional[str] = None
-    ) -> Optional[Tuple[str, str, str, str]]:
-        ...
+    ) -> Optional[Tuple[str, str, str, str]]: ...
 
     async def ck_in_new_device(
         self, uid: str, app_cookie: Optional[str] = None
@@ -388,9 +383,7 @@ class BaseMysApi:
         else:
             proxy = None
 
-        async with ClientSession(
-            connector=TCPConnector(verify_ssl=ssl_verify)
-        ) as client:
+        async with httpx.AsyncClient(verify=ssl_verify, proxy=proxy) as client:
             raw_data = {}
             uid = None
             if params and 'role_id' in params:
@@ -418,74 +411,73 @@ class BaseMysApi:
 
             logger.debug(header)
             for _ in range(2):
-                async with client.request(
+                resp = await client.request(
                     method,
                     url=url,
                     headers=header,
                     params=params,
                     json=data,
-                    proxy=proxy,
                     timeout=300,
-                ) as resp:
-                    try:
-                        raw_data = await resp.json()
-                    except ContentTypeError:
-                        _raw_data = await resp.text()
-                        raw_data = {'retcode': -999, 'data': _raw_data}
+                )
+                try:
+                    raw_data = resp.json()
+                except ContentTypeError:
+                    _raw_data = resp.text
+                    raw_data = {'retcode': -999, 'data': _raw_data}
 
-                    logger.debug(raw_data)
+                logger.debug(raw_data)
 
-                    # 判断retcode
-                    if 'retcode' in raw_data:
-                        retcode: int = raw_data['retcode']
-                    elif 'code' in raw_data:
-                        retcode: int = raw_data['code']
-                    else:
-                        retcode = 0
+                # 判断retcode
+                if 'retcode' in raw_data:
+                    retcode: int = raw_data['retcode']
+                elif 'code' in raw_data:
+                    retcode: int = raw_data['code']
+                else:
+                    retcode = 0
 
-                    # 针对1034做特殊处理
-                    if retcode == 1034 or retcode == 5003:
-                        if uid:
-                            header['x-rpc-challenge_game'] = (
-                                '6' if self.is_sr else '2'
+                # 针对1034做特殊处理
+                if retcode == 1034 or retcode == 5003 or retcode == 10035:
+                    if uid:
+                        header['x-rpc-challenge_game'] = (
+                            '6' if self.is_sr else '2'
+                        )
+                        header['x-rpc-page'] = (
+                            'v1.4.1-rpg_#/rpg'
+                            if self.is_sr
+                            else 'v4.1.5-ys_#ys'
+                        )
+                        header['x-rpc-tool-verison'] = (
+                            'v1.4.1-rpg' if self.is_sr else 'v4.1.5-ys'
+                        )
+
+                    if core_plugins_config.get_config('MysPass').data:
+                        pass_header = copy.deepcopy(header)
+                        ch = await self._upass(pass_header)
+                        if ch == '':
+                            return 114514
+                        else:
+                            header['x-rpc-challenge'] = ch
+
+                    if 'DS' in header:
+                        if isinstance(params, Dict):
+                            q = '&'.join(
+                                [
+                                    f'{k}={v}'
+                                    for k, v in sorted(
+                                        params.items(),
+                                        key=lambda x: x[0],
+                                    )
+                                ]
                             )
-                            header['x-rpc-page'] = (
-                                'v1.4.1-rpg_#/rpg'
-                                if self.is_sr
-                                else 'v4.1.5-ys_#ys'
-                            )
-                            header['x-rpc-tool-verison'] = (
-                                'v1.4.1-rpg' if self.is_sr else 'v4.1.5-ys'
-                            )
+                        else:
+                            q = ''
+                        header['DS'] = get_ds_token(q, data)
 
-                        if core_plugins_config.get_config('MysPass').data:
-                            pass_header = copy.deepcopy(header)
-                            ch = await self._upass(pass_header)
-                            if ch == '':
-                                return 114514
-                            else:
-                                header['x-rpc-challenge'] = ch
-
-                        if 'DS' in header:
-                            if isinstance(params, Dict):
-                                q = '&'.join(
-                                    [
-                                        f'{k}={v}'
-                                        for k, v in sorted(
-                                            params.items(),
-                                            key=lambda x: x[0],
-                                        )
-                                    ]
-                                )
-                            else:
-                                q = ''
-                            header['DS'] = get_ds_token(q, data)
-
-                        logger.debug(header)
-                    elif retcode != 0:
-                        return retcode
-                    else:
-                        return raw_data
+                    logger.debug(header)
+                elif retcode != 0:
+                    return retcode
+                else:
+                    return raw_data
             else:
                 return -999
 
@@ -575,9 +567,11 @@ class MysApi(BaseMysApi):
             },
         )
         _ = await self._mys_request(
-            url=self.MAPI['VERIFY_URL']
-            if not is_bbs
-            else self.MAPI['BBS_VERIFY_URL'],
+            url=(
+                self.MAPI['VERIFY_URL']
+                if not is_bbs
+                else self.MAPI['BBS_VERIFY_URL']
+            ),
             method='POST',
             header=header,
             data={
@@ -850,7 +844,11 @@ class MysApi(BaseMysApi):
         if isinstance(data, Dict):
             return data
         elif data == -512009:
-            return {'data': None, 'message': '这张画片已经被收录啦~', 'retcode': -512009}
+            return {
+                'data': None,
+                'message': '这张画片已经被收录啦~',
+                'retcode': -512009,
+            }
         else:
             return -999
 
@@ -1077,6 +1075,17 @@ class MysApi(BaseMysApi):
                 'uid': mys_id,
             },
         )
+        if isinstance(data, int):
+            data = await self._mys_request(
+                url=self.MAPI['GET_STOKEN_URL_OS'],
+                method='GET',
+                header=self._HEADER,
+                params={
+                    'login_ticket': lt,
+                    'token_types': '3',
+                    'uid': mys_id,
+                },
+            )
         if isinstance(data, Dict):
             data = cast(LoginTicketInfo, data['data'])
         return data
@@ -1262,9 +1271,11 @@ class MysApi(BaseMysApi):
             # 'amount': 600,
             'goods_num': 1,
             'goods_id': goods['goods_id'],
-            'goods_title': f'{goods["goods_name"]}×{str(goods["goods_unit"])}'
-            if int(goods['goods_unit']) > 0
-            else goods['goods_name'],
+            'goods_title': (
+                f'{goods["goods_name"]}×{str(goods["goods_unit"])}'
+                if int(goods['goods_unit']) > 0
+                else goods['goods_name']
+            ),
             'price_tier': goods['tier_id'],
             # 'price_tier': 'Tier_1',
             'currency': 'CNY',
