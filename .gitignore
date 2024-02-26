@@ -657,6 +657,10 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
+# Ignore macOS rubbish
+.DS_Store
+*/.DS_Store
+
 ### VisualStudio Patch ###
 # Additional files built by Visual Studio
 

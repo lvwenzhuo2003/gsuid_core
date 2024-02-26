@@ -24,8 +24,12 @@ async def check_url(tag: str, url: str):
             async with session.get(url) as response:
                 elapsed_time = time.time() - start_time
                 if response.status == 200:
-                    logger.debug(f'{tag} {url} 延时: {elapsed_time}')
-                    return tag, url, elapsed_time
+                    if 'Index of /' in await response.text():
+                        logger.debug(f'{tag} {url} 延时: {elapsed_time}')
+                        return tag, url, elapsed_time
+                    else:
+                        logger.info(f'{tag} {url} 未超时但失效...')
+                        return tag, url, float('inf')
                 else:
                     logger.info(f'{tag} {url} 超时...')
                     return tag, url, float('inf')
@@ -65,9 +69,9 @@ async def check_speed():
     URL_LIB = {
         '[JPFRP]': 'http://jp-2.lcf.icu:13643',
         '[HKFRP]': 'http://hk-1.5gbps-2.lcf.icu:10200',
-        '[Chuncheon]': 'https://kr.qxxx.tech',
-        '[Seoul]': 'https://kr-s.qxxx.tech',
-        '[Tokyo]': 'https://jp.qxqx.me',
+        '[Chuncheon]': 'https://kr.qxqx.cf',
+        '[Seoul]': 'https://kr-s.qxqx.cf',
+        '[Singapore]': 'https://sg.qxqx.cf',
     }
 
     TAG, BASE_URL = await find_fastest_url(URL_LIB)
