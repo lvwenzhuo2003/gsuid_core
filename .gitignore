@@ -661,6 +661,9 @@ FodyWeavers.xsd
 .DS_Store
 */.DS_Store
 
+# Ignore VSCode configuration
+.vscode/*
+
 ### VisualStudio Patch ###
 # Additional files built by Visual Studio
 
