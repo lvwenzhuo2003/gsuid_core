@@ -1,3 +1,6 @@
 [submodule "gsuid_core/plugins/GenshinUID"]
 	path = gsuid_core/plugins/GenshinUID
 	url = https://github.com/lvwenzhuo2003/GenshinUID.git
+[submodule "gsuid_core/plugins/StarRailUID"]
+	path = gsuid_core/plugins/StarRailUID
+	url = https://github.com/lvwenzhuo2003/StarRailUID.git
