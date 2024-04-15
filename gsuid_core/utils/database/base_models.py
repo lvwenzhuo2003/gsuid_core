@@ -45,7 +45,9 @@ def with_session(
     @wraps(func)
     async def wrapper(self, *args: P.args, **kwargs: P.kwargs):
         async with async_maker() as session:
-            return await func(self, session, *args, **kwargs)
+            data = await func(self, session, *args, **kwargs)
+            await session.commit()
+            return data
 
     return wrapper  # type: ignore
 
@@ -99,8 +101,59 @@ class BaseIDModel(SQLModel):
             🔸`int`: 恒为0
         '''
         session.add(cls(**data))
-        await session.commit()
         return 0
+
+    @classmethod
+    @with_session
+    async def delete_row(
+        cls: Type[T_BaseIDModel],
+        session: AsyncSession,
+        **data,
+    ) -> int:
+        '''
+        ✅返回值:
+
+            🔸`int`: 如为1则删除成功，否则删除失败(数据不存在)
+        '''
+        if cls.data_exist(**data):
+            await session.delete(cls(**data))
+            return 1
+        else:
+            return 0
+
+    @classmethod
+    @with_session
+    async def select_rows(
+        cls: Type[T_BaseIDModel],
+        session: AsyncSession,
+        distinct: bool = False,
+        **data,
+    ) -> Optional[List[T_BaseIDModel]]:
+        '''📝简单介绍:
+
+            数据库基类基础选择数据方法
+
+        🌱参数:
+
+            🔹`**data`
+                    选择的数据, 入参列名等于数据即可
+
+        🚀使用范例:
+
+            `await GsUser.base_select_data(uid='100740568')`
+
+        ✅返回值:
+
+            🔸`Optional[List[T_BaseIDModel]]`: 选中全部符合条件的数据，或者为`None`
+        '''
+        stmt = select(cls)
+        for k, v in data.items():
+            stmt = stmt.where(getattr(cls, k) == v)
+        if distinct:
+            stmt = stmt.distinct()
+        result = await session.execute(stmt)
+        data = result.scalars().all()
+        return data
 
     @classmethod
     @with_session
@@ -124,11 +177,7 @@ class BaseIDModel(SQLModel):
 
             🔸`Optional[T_BaseIDModel]`: 选中符合条件的第一个数据，或者为`None`
         '''
-        stmt = select(cls)
-        for k, v in data.items():
-            stmt = stmt.where(getattr(cls, k) == v)
-        result = await session.execute(stmt)
-        data = result.scalars().all()
+        data = await cls.select_rows(**data)
         return data[0] if data else None
 
     @classmethod
@@ -188,7 +237,6 @@ class BaseBotIDModel(BaseIDModel):
             query = sql.values(**data)
             query.execution_options(synchronize_session='fetch')
             await session.execute(query)
-            await session.commit()
             return 0
         return -1
 
@@ -227,7 +275,6 @@ class BaseBotIDModel(BaseIDModel):
             query = sql.values(**data)
             query.execution_options(synchronize_session='fetch')
             await session.execute(query)
-            await session.commit()
             return 0
         return -1
 
@@ -279,9 +326,18 @@ class BaseBotIDModel(BaseIDModel):
             query = sql.values(**data)
             query.execution_options(synchronize_session='fetch')
             await session.execute(query)
-            await session.commit()
             return 0
         return -1
+
+    @classmethod
+    @with_session
+    async def get_all_data(
+        cls: Type[T_BaseIDModel],
+        session: AsyncSession,
+    ) -> List[Type[T_BaseIDModel]]:
+        rdata = await session.execute(select(cls))
+        data: List[Type[T_BaseIDModel]] = rdata.scalars().all()
+        return data
 
 
 class BaseModel(BaseBotIDModel):
@@ -326,7 +382,7 @@ class BaseModel(BaseBotIDModel):
                 cls.user_id == user_id, cls.bot_id == bot_id
             )
         result = await session.execute(sql)
-        data = result.scalars()._allrows()
+        data = result.scalars().all()
         return data if data else None
 
     @classmethod
@@ -399,7 +455,6 @@ class BaseModel(BaseBotIDModel):
             await cls.update_data(user_id, bot_id, **data)
         else:
             session.add(cls(user_id=user_id, bot_id=bot_id, **data))
-            await session.commit()
         return 0
 
     @classmethod
@@ -432,8 +487,49 @@ class BaseModel(BaseBotIDModel):
             🔸`int`: 恒为0
         '''
         await session.delete(cls(user_id=user_id, bot_id=bot_id, **data))
-        await session.commit()
         return 0
+
+    @classmethod
+    @with_session
+    async def update_data_by_data(
+        cls: Type[T_BaseModel],
+        session: AsyncSession,
+        select_data: Dict,
+        update_data: Dict,
+    ) -> int:
+        '''📝简单介绍:
+
+            基类的数据更新方法
+
+        🌱参数:
+
+            🔹select_data (`Dict`):
+                    寻找数据条件, 例如`{"user_id": `event.bot_id`}`
+
+            🔹`update_data (`Dict`)`:
+                    要更新的数据
+
+        🚀使用范例:
+
+            `await GsUser.update_data_by_data(`
+                `select_data={"user_id": `event.bot_id`}, `
+                `update_data={"bot_id": 'onebot', "uid": '22'}`
+            `)`
+
+        ✅返回值:
+
+            🔸`int`: 成功为0, 失败为-1（未找到数据则无法更新）
+        '''
+        sql = update(cls)
+        for k, v in select_data.items():
+            sql = sql.where(getattr(cls, k) == v)
+
+        if update_data:
+            query = sql.values(**update_data)
+            query.execution_options(synchronize_session='fetch')
+            await session.execute(query)
+            return 0
+        return -1
 
     @classmethod
     @with_session
@@ -474,7 +570,6 @@ class BaseModel(BaseBotIDModel):
             query = sql.values(**data)
             query.execution_options(synchronize_session='fetch')
             await session.execute(query)
-            await session.commit()
             return 0
         return -1
 
@@ -710,6 +805,9 @@ class Bind(BaseModel):
         result = [i for i in result if i] if result else []
         new_uid = '_'.join(result)
 
+        if not new_uid:
+            new_uid = None
+
         await cls.update_data(
             user_id,
             bot_id,
@@ -747,7 +845,7 @@ class Bind(BaseModel):
         '''
         sql = select(cls).where(cls.bot_id == bot_id)
         result = await session.execute(sql)
-        data = result.scalars()._allrows()
+        data = result.scalars().all()
         uid_list: List[str] = []
         for item in data:
             uid = getattr(item, cls.get_gameid_name(game_name))
@@ -867,7 +965,7 @@ class User(BaseModel):
         session: AsyncSession,
         uid: str,
         game_name: Optional[str] = None,
-    ) -> Optional[T_User]:
+    ) -> Optional[Type["User"]]:
         '''📝简单介绍:
 
             基础`User`类的数据选择方法
@@ -897,7 +995,7 @@ class User(BaseModel):
     @with_session
     async def get_user_all_data_by_user_id(
         cls: Type[T_User], session: AsyncSession, user_id: str
-    ) -> Optional[List[T_User]]:
+    ) -> Optional[List[Type["User"]]]:
         '''📝简单介绍:
 
             基础`User`类的数据选择方法, 获取该`user_id`绑定的全部数据实例
@@ -918,7 +1016,7 @@ class User(BaseModel):
         result = await session.execute(
             select(cls).where(cls.user_id == user_id)
         )
-        data = result.scalars()._allrows()
+        data = result.scalars().all()
         return data if data else None
 
     @classmethod
@@ -996,7 +1094,6 @@ class User(BaseModel):
             .values(status=mark)
         )
         await session.execute(sql)
-        await session.commit()
         return True
 
     @classmethod
@@ -1057,7 +1154,7 @@ class User(BaseModel):
     @with_session
     async def get_switch_open_list(
         cls: Type[T_User], session: AsyncSession, switch_name: str
-    ) -> List[T_User]:
+    ) -> List[Type["User"]]:
         '''📝简单介绍:
 
             根据表定义的结构, 根据传入的`switch_name`, 寻找表数据中的该列
@@ -1084,14 +1181,14 @@ class User(BaseModel):
         _switch = getattr(cls, switch_name, cls.push_switch)
         sql = select(cls).filter(and_(_switch != 'off', true()))
         data = await session.execute(sql)
-        data_list: List[T_User] = data.scalars()._allrows()
+        data_list: List[Type["User"]] = data.scalars().all()
         return [user for user in data_list]
 
     @classmethod
     @with_session
     async def get_all_user(
         cls: Type[T_User], session: AsyncSession, without_error: bool = True
-    ) -> List[T_User]:
+    ) -> List[Type["User"]]:
         '''📝简单介绍:
 
             基础`User`类的扩展方法, 获取到全部的数据列表
@@ -1118,7 +1215,7 @@ class User(BaseModel):
         else:
             sql = select(cls).where(cls.cookie != null(), cls.cookie != '')
         result = await session.execute(sql)
-        data = result.scalars()._allrows()
+        data = result.scalars().all()
         return data
 
     @classmethod
@@ -1143,7 +1240,7 @@ class User(BaseModel):
         return [_u.cookie for _u in data if _u.cookie and _u.status]
 
     @classmethod
-    async def get_all_push_user_list(cls: Type[T_User]) -> List[T_User]:
+    async def get_all_push_user_list(cls: Type[T_User]) -> List[Type["User"]]:
         '''获得表数据中全部的`push_switch != off`的数据列表'''
         data = await cls.get_all_user()
         return [user for user in data if user.push_switch != 'off']
@@ -1223,7 +1320,7 @@ class User(BaseModel):
                     .order_by(func.random())
                 )
                 data = await session.execute(sql)
-                user_list: List[T_User] = data.scalars()._allrows()
+                user_list: List[Type["User"]] = data.scalars().all()
                 break
             else:
                 user_list = await cls.get_all_user()
@@ -1257,7 +1354,6 @@ class User(BaseModel):
                 getattr(cls, cls.get_gameid_name(game_name)) == uid
             )
             await session.execute(sql)
-            await session.commit()
             return True
         return False
 
@@ -1278,7 +1374,7 @@ class Cache(BaseIDModel):
             getattr(cls, cls.get_gameid_name(game_name)) == uid
         )
         result = await session.execute(sql)
-        data = result.scalars()._allrows()
+        data = result.scalars().all()
         return data[0].cookie if len(data) >= 1 else None
 
     @classmethod
@@ -1322,7 +1418,6 @@ class Cache(BaseIDModel):
         empty_sql = delete(cls)
         await session.execute(sql)
         await session.execute(empty_sql)
-        await session.commit()
         return True
 
     @classmethod
@@ -1346,7 +1441,6 @@ class Cache(BaseIDModel):
         '''新增指定`cookie`的数据行, `**data`为数据'''
         new_data = cls(cookie=cookie, **data)
         session.add(new_data)
-        await session.commit()
         return True
 
 
@@ -1358,7 +1452,7 @@ class Push(BaseBotIDModel):
         session: AsyncSession,
         uid: str,
         game_name: Optional[str] = None,
-    ) -> Optional[T_Push]:
+    ) -> Optional[Type["Push"]]:
         '''📝简单介绍:
 
             基础`Push`类的数据选择方法

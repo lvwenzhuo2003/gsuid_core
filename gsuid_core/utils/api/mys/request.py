@@ -84,6 +84,8 @@ RECOGNIZE_SERVER = {
     '9': 'os_cht',
 }
 
+_DEAD_CODE = [10035, 5003, 10041, 1034]
+
 
 class BaseMysApi:
     Gproxy: Optional[str] = Gproxy if Gproxy else None
@@ -186,7 +188,8 @@ class BaseMysApi:
         seed_id: str,
         seed_time: str,
     ) -> str:
-        ext_fields = f'''{{"cpuType":"arm64-v8a","romCapacity":"512","productName":"{device}","romRemain":"422","manufacturer":"XiaoMi","appMemory":"512","hostname":"dg02-pool03-kvm87","screenSize":"1240x2662","osVersion":"13","aaid":"{self.generate_ID()}","vendor":"中国联通","accelerometer":"1.4883357x7.1712894x6.2847486","buildTags":"release-keys","model":"{model_name}","brand":"XiaoMi","oaid":"{oaid}","hardware":"qcom","deviceType":"{device_type}","devId":"REL","serialNumber":"unknown","buildTime":"1687848011000","buildUser":"root","ramCapacity":"469679","magnetometer":"20.081251x-27.487501x2.1937501","display":"{model_name}_13.1.0.181(CN01)","ramRemain":"215344","deviceInfo":"{device_info}","gyroscope":"0.030226856x0.014647375x0.010652636","vaid":"{self.generate_ID()}","buildType":"user","sdkVersion":"33","board":"{board}"}}'''  # noqa
+        device_brand = device_info.split('/')[0]
+        ext_fields = f'''{{"cpuType":"arm64-v8a","romCapacity":"512","productName":"{device}","romRemain":"422","manufacturer":"{device_brand}","appMemory":"512","hostname":"dg02-pool03-kvm87","screenSize":"1264x2640","osVersion":"13","aaid":"{self.generate_ID()}","vendor":"中国联通","accelerometer":"0.44027936x7.256833x6.422336","buildTags":"release-keys","model":"{model_name}","brand":"XiaoMi","oaid":"{oaid}","hardware":"qcom","deviceType":"{device_type}","devId":"REL","serialNumber":"unknown","buildTime":"1687848011000","buildUser":"root","ramCapacity":"469679","magnetometer":"20.081251x-27.487501x2.1937501","display":"{model_name}_13.1.0.181(CN01)","ramRemain":"215344","deviceInfo":"{device_info}","gyroscope":"0.030226856x0.014647375x0.010652636","vaid":"{self.generate_ID()}","buildType":"user","sdkVersion":"33","board":"{board}"}}'''  # noqa
 
         body = {
             'device_id': self.generate_seed(16),
@@ -435,8 +438,8 @@ class BaseMysApi:
                 else:
                     retcode = 0
 
-                # 针对1034做特殊处理
-                if retcode == 1034 or retcode == 5003 or retcode == 10035:
+                # 做特殊处理
+                if retcode in _DEAD_CODE:
                     if uid:
                         header['x-rpc-challenge_game'] = (
                             '6' if self.is_sr else '2'

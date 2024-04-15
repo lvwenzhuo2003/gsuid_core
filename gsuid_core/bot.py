@@ -9,11 +9,15 @@ from gsuid_core.gs_logger import GsLogger
 from gsuid_core.global_val import get_global_val
 from gsuid_core.message_models import Button, ButtonType
 from gsuid_core.models import Event, Message, MessageSend
-from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
 from gsuid_core.load_template import (
     parse_button,
     custom_buttons,
     button_templates,
+)
+from gsuid_core.utils.plugins_config.gs_config import (
+    sp_config,
+    core_plugins_config,
+    send_security_config,
 )
 from gsuid_core.segment import (
     MessageSegment,
@@ -23,8 +27,11 @@ from gsuid_core.segment import (
     markdown_to_template_markdown,
 )
 
-sp_msg_id: str = core_plugins_config.get_config('SpecificMsgId').data
-is_sp_msg_id: str = core_plugins_config.get_config('EnableSpecificMsgId').data
+button_row_num: int = sp_config.get_config('ButtonRow').data
+
+sp_msg_id: str = send_security_config.get_config('SpecificMsgId').data
+is_sp_msg_id: str = send_security_config.get_config('EnableSpecificMsgId').data
+
 ism: List = core_plugins_config.get_config('SendMDPlatform').data
 isb: List = core_plugins_config.get_config('SendButtonsPlatform').data
 isc: List = core_plugins_config.get_config('SendTemplatePlatform').data
@@ -215,6 +222,7 @@ class Bot:
                 istry and self.ev.real_bot_id in enable_Template_platform
             ):
                 _buttons = []
+                _cus_buttons = []
                 for option in option_list:
                     if isinstance(option, List):
                         _button_row: List[Button] = []
@@ -224,10 +232,19 @@ class Bot:
                             else:
                                 _button_row.append(Button(op, op, op))
                         _buttons.append(_button_row)
-                    elif isinstance(option, Button):
-                        _buttons.append(option)
                     else:
-                        _buttons.append(Button(option, option, option))
+                        if isinstance(option, Button):
+                            _cus_buttons.append(option)
+                        else:
+                            _cus_buttons.append(Button(option, option, option))
+                            
+                if _cus_buttons:
+                    _buttons = [
+                        _cus_buttons[i : i + button_row_num]  # noqa: E203
+                        for i in range(
+                            0, len(_cus_buttons), button_row_num
+                        )
+                    ]
 
                 md = await to_markdown(_reply, _buttons, self.bot_id)
 

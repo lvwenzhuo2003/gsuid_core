@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Dict, Union, Optional
 
 from PIL import Image, ImageDraw
 
 from gsuid_core.handler import command_start
 from gsuid_core.utils.fonts.fonts import core_font
 from gsuid_core.utils.image.convert import convert_img
-from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
+from gsuid_core.utils.plugins_config.gs_config import send_security_config
 from gsuid_core.utils.image.image_tools import (
     get_color_bg,
     draw_center_text_by_line,
@@ -66,11 +66,26 @@ error_dict = {
 }
 
 TEXT_PATH = Path(__file__).parent / 'image' / 'texture2d'
-is_pic_error = core_plugins_config.get_config('ChangeErrorToPic').data
+is_pic_error = send_security_config.get_config('ChangeErrorToPic').data
 
 
-def get_error(retcode: Union[int, str]) -> str:
-    return error_dict.get(int(retcode), f'未知错误, 错误码为{retcode}!')
+def get_error(
+    retcode: Union[int, str], message: Union[str, Dict, None] = None
+) -> str:
+    if isinstance(message, str):
+        _msg = message
+    elif isinstance(message, Dict):
+        if 'message' in message:
+            _msg = message['message']
+        elif 'msg' in message:
+            _msg = message['msg']
+        else:
+            _msg = '无可用信息。'
+    else:
+        _msg = '无可用信息。'
+    return error_dict.get(
+        int(retcode), f'未知错误, 错误码为{retcode}!\n可能的错误消息: {_msg}'
+    )
 
 
 def get_error_type(retcode: Union[int, str]) -> str:
@@ -84,9 +99,11 @@ def get_error_type(retcode: Union[int, str]) -> str:
 
 
 async def get_error_img(
-    retcode: Union[int, str], force_image: bool = False
+    retcode: Union[int, str],
+    force_image: bool = False,
+    message: Union[str, Dict, None] = None,
 ) -> Union[bytes, str]:
-    error_message = get_error(retcode)
+    error_message = get_error(retcode, message)
     if is_pic_error or force_image:
         error_type = get_error_type(retcode)
         return await draw_error_img(retcode, error_message, error_type)
