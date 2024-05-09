@@ -30,6 +30,7 @@ from gsuid_core.logger import logger
 from gsuid_core.utils.database.api import DBSqla
 from gsuid_core.utils.database.models import GsUser
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
+from .bbs_request import BBSMysApi
 
 from .api import _API
 from .tools import (
@@ -115,26 +116,32 @@ class BaseMysApi:
     dbsqla: DBSqla = DBSqla()
 
     @abstractmethod
-    async def _upass(self, header: Dict) -> str: ...
+    async def _upass(self, header: Dict) -> str:
+        ...
 
     @abstractmethod
     async def _pass(
-        self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]: ...
+            self, gt: str, ch: str, header: Dict
+    ) -> Tuple[Optional[str], Optional[str]]:
+        ...
 
     @abstractmethod
     async def get_ck(
-        self, uid: str, mode: Literal['OWNER', 'RANDOM'] = 'RANDOM'
-    ) -> Optional[str]: ...
+            self, uid: str, mode: Literal['OWNER', 'RANDOM'] = 'RANDOM'
+    ) -> Optional[str]:
+        ...
 
     @abstractmethod
-    async def get_stoken(self, uid: str) -> Optional[str]: ...
+    async def get_stoken(self, uid: str) -> Optional[str]:
+        ...
 
     @abstractmethod
-    async def get_user_fp(self, uid: str) -> Optional[str]: ...
+    async def get_user_fp(self, uid: str) -> Optional[str]:
+        ...
 
     @abstractmethod
-    async def get_user_device_id(self, uid: str) -> Optional[str]: ...
+    async def get_user_device_id(self, uid: str) -> Optional[str]:
+        ...
 
     def get_device_id(self) -> str:
         device_id = str(uuid.uuid4()).lower()
@@ -161,7 +168,7 @@ class BaseMysApi:
         return self.get_device_id(), str(int(time.time() * 1000))
 
     async def generate_fake_fp(
-        self, device_id: str, seed_id: str, seed_time: str
+            self, device_id: str, seed_id: str, seed_time: str
     ):
         return await self.generate_fp(
             device_id,
@@ -177,16 +184,16 @@ class BaseMysApi:
         )
 
     async def generate_fp(
-        self,
-        device_id: str,
-        model_name: str,
-        device: str,
-        device_type: str,
-        board: str,
-        oaid: str,
-        device_info: str,
-        seed_id: str,
-        seed_time: str,
+            self,
+            device_id: str,
+            model_name: str,
+            device: str,
+            device_type: str,
+            board: str,
+            oaid: str,
+            device_info: str,
+            seed_id: str,
+            seed_time: str,
     ) -> str:
         device_brand = device_info.split('/')[0]
         ext_fields = f'''{{"cpuType":"arm64-v8a","romCapacity":"512","productName":"{device}","romRemain":"422","manufacturer":"{device_brand}","appMemory":"512","hostname":"dg02-pool03-kvm87","screenSize":"1264x2640","osVersion":"13","aaid":"{self.generate_ID()}","vendor":"中国联通","accelerometer":"0.44027936x7.256833x6.422336","buildTags":"release-keys","model":"{model_name}","brand":"XiaoMi","oaid":"{oaid}","hardware":"qcom","deviceType":"{device_type}","devId":"REL","serialNumber":"unknown","buildTime":"1687848011000","buildUser":"root","ramCapacity":"469679","magnetometer":"20.081251x-27.487501x2.1937501","display":"{model_name}_13.1.0.181(CN01)","ramRemain":"215344","deviceInfo":"{device_info}","gyroscope":"0.030226856x0.014647375x0.010652636","vaid":"{self.generate_ID()}","buildType":"user","sdkVersion":"33","board":"{board}"}}'''  # noqa
@@ -225,7 +232,7 @@ class BaseMysApi:
         return await self._mys_request(url, 'GET', header)
 
     async def device_login_and_save(
-        self, device_id: str, device_fp: str, device_info: str, cookie: str
+            self, device_id: str, device_fp: str, device_info: str, cookie: str
     ):
         info = device_info.split('/')
         brand, model_name = info[0], info[1]
@@ -264,12 +271,12 @@ class BaseMysApi:
         )
 
     async def simple_mys_req(
-        self,
-        URL: str,
-        uid: Union[str, bool],
-        params: Dict = {},
-        header: Dict = {},
-        cookie: Optional[str] = None,
+            self,
+            URL: str,
+            uid: Union[str, bool],
+            params: Dict = {},
+            header: Dict = {},
+            cookie: Optional[str] = None,
     ) -> Union[Dict, int]:
         if isinstance(uid, bool):
             is_os = uid
@@ -310,11 +317,11 @@ class BaseMysApi:
         return data
 
     async def _mys_req_get(
-        self,
-        url: str,
-        is_os: bool,
-        params: Dict,
-        header: Optional[Dict] = None,
+            self,
+            url: str,
+            is_os: bool,
+            params: Dict,
+            header: Optional[Dict] = None,
     ) -> Union[Dict, int]:
         if is_os:
             _URL = self.MAPI[f'{url}_OS']
@@ -343,16 +350,18 @@ class BaseMysApi:
 
     @overload
     async def ck_in_new_device(
-        self, uid: str, app_cookie: str
-    ) -> Tuple[str, str, str, str]: ...
+            self, uid: str, app_cookie: str
+    ) -> Tuple[str, str, str, str]:
+        ...
 
     @overload
     async def ck_in_new_device(
-        self, uid: str, app_cookie: Optional[str] = None
-    ) -> Optional[Tuple[str, str, str, str]]: ...
+            self, uid: str, app_cookie: Optional[str] = None
+    ) -> Optional[Tuple[str, str, str, str]]:
+        ...
 
     async def ck_in_new_device(
-        self, uid: str, app_cookie: Optional[str] = None
+            self, uid: str, app_cookie: Optional[str] = None
     ):
         data = await GsUser.base_select_data(stoken=app_cookie)
         device_id = self.get_device_id()
@@ -377,13 +386,13 @@ class BaseMysApi:
         return fp, device_id, seed_id, seed_time
 
     async def _mys_request(
-        self,
-        url: str,
-        method: Literal['GET', 'POST'] = 'GET',
-        header: Dict[str, Any] = _HEADER,
-        params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None,
-        use_proxy: Optional[bool] = False,
+            self,
+            url: str,
+            method: Literal['GET', 'POST'] = 'GET',
+            header: Dict[str, Any] = _HEADER,
+            params: Optional[Dict[str, Any]] = None,
+            data: Optional[Dict[str, Any]] = None,
+            use_proxy: Optional[bool] = False,
     ) -> Union[Dict, int]:
         if use_proxy and self.Gproxy:
             proxy = self.Gproxy
@@ -473,9 +482,9 @@ class BaseMysApi:
                                 [
                                     f'{k}={v}'
                                     for k, v in sorted(
-                                        params.items(),
-                                        key=lambda x: x[0],
-                                    )
+                                    params.items(),
+                                    key=lambda x: x[0],
+                                )
                                 ]
                             )
                         else:
@@ -491,9 +500,9 @@ class BaseMysApi:
                 return -999
 
 
-class MysApi(BaseMysApi):
+class MysApi(BBSMysApi):
     async def _pass(
-        self, gt: str, ch: str, header: Dict
+            self, gt: str, ch: str, header: Dict
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         # 免责声明：
         # 此模块使用了第三方验证码识别服务，该服务由第三方提供，与本模块作者无关。
@@ -537,7 +546,6 @@ class MysApi(BaseMysApi):
         except ConnectionError:
             return ''
 
-
         if vl:
             await self.get_header_and_vl(header, ch, vl, is_bbs)
             if ch:
@@ -565,7 +573,7 @@ class MysApi(BaseMysApi):
         )
 
     async def get_header_and_vl(
-        self, header: Dict, ch, vl, is_bbs: bool = False
+            self, header: Dict, ch, vl, is_bbs: bool = False
     ):
         header['DS'] = get_ds_token(
             '',
@@ -594,7 +602,7 @@ class MysApi(BaseMysApi):
         return False if int(str(uid)[0]) < 6 else True
 
     async def get_info(
-        self, uid, ck: Optional[str] = None
+            self, uid, ck: Optional[str] = None
     ) -> Union[IndexData, int]:
         data = await self.simple_mys_req('PLAYER_INFO_URL', uid, cookie=ck)
         if isinstance(data, Dict):
@@ -620,7 +628,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_cookie_token(
-        self, token: str, uid: str
+            self, token: str, uid: str
     ) -> Union[CookieTokenInfo, int]:
         data = await self._mys_request(
             self.MAPI['GET_COOKIE_TOKEN_BY_GAME_TOKEN'],
@@ -680,7 +688,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def mys_sign(
-        self, uid, header={}, server_id='cn_gf01'
+            self, uid, header={}, server_id='cn_gf01'
     ) -> Union[MysSign, int]:
         server_id = self.RECOGNIZE_SERVER.get(str(uid)[0])
         ck = await self.get_ck(uid, 'OWNER')
@@ -828,7 +836,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def post_draw(
-        self, uid: str, role_id: int
+            self, uid: str, role_id: int
     ) -> Union[int, PostDraw, Dict]:
         server_id = self.RECOGNIZE_SERVER.get(uid[0])
         ck = await self.get_ck(uid, 'OWNER')
@@ -862,7 +870,7 @@ class MysApi(BaseMysApi):
             return -999
 
     async def get_spiral_abyss_info(
-        self, uid: str, schedule_type='1', ck: Optional[str] = None
+            self, uid: str, schedule_type='1', ck: Optional[str] = None
     ) -> Union[AbyssData, int]:
         server_id = self.RECOGNIZE_SERVER.get(uid[0])
         data = await self.simple_mys_req(
@@ -880,7 +888,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_character(
-        self, uid: str, character_ids: List[int], ck: Union[str, None] = None
+            self, uid: str, character_ids: List[int], ck: Union[str, None] = None
     ) -> Union[CharDetailData, int]:
         server_id = self.RECOGNIZE_SERVER.get(str(uid)[0])
 
@@ -930,7 +938,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_calculate_info(
-        self, uid, char_id: int
+            self, uid, char_id: int
     ) -> Union[CalculateInfo, int]:
         server_id = self.RECOGNIZE_SERVER.get(str(uid)[0])
         data = await self.simple_mys_req(
@@ -943,10 +951,10 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_mihoyo_bbs_info(
-        self,
-        mys_id: str,
-        cookie: Optional[str] = None,
-        is_os: bool = False,
+            self,
+            mys_id: str,
+            cookie: Optional[str] = None,
+            is_os: bool = False,
     ) -> Union[List[MysGame], int]:
         if not cookie:
             cookie = await self.get_ck(mys_id, 'OWNER')
@@ -981,7 +989,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def check_qrcode(
-        self, app_id: str, ticket: str, device: str
+            self, app_id: str, ticket: str, device: str
     ) -> Union[QrCodeStatus, int]:
         data = await self._mys_request(
             self.MAPI['CHECK_QRCODE'],
@@ -997,11 +1005,11 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_gacha_log_by_authkey(
-        self,
-        uid: str,
-        gacha_type: str = '301',
-        page: int = 1,
-        end_id: str = '0',
+            self,
+            uid: str,
+            gacha_type: str = '301',
+            page: int = 1,
+            end_id: str = '0',
     ) -> Union[int, GachaLog]:
         server_id = 'cn_qd01' if uid[0] == '5' else 'cn_gf01'
         authkey_rawdata = await self.get_authkey_by_cookie(uid)
@@ -1037,7 +1045,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_cookie_token_by_game_token(
-        self, token: str, uid: str
+            self, token: str, uid: str
     ) -> Union[CookieTokenInfo, int]:
         data = await self._mys_request(
             self.MAPI['GET_COOKIE_TOKEN_BY_GAME_TOKEN'],
@@ -1052,7 +1060,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_cookie_token_by_stoken(
-        self, stoken: str, mys_id: str, full_sk: Optional[str] = None
+            self, stoken: str, mys_id: str, full_sk: Optional[str] = None
     ) -> Union[CookieTokenInfo, int]:
         HEADER = copy.deepcopy(self._HEADER)
         if full_sk:
@@ -1073,7 +1081,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_stoken_by_login_ticket(
-        self, lt: str, mys_id: str
+            self, lt: str, mys_id: str
     ) -> Union[LoginTicketInfo, int]:
         data = await self._mys_request(
             url=self.MAPI['GET_STOKEN_URL'],
@@ -1101,7 +1109,7 @@ class MysApi(BaseMysApi):
         return data
 
     async def get_stoken_by_game_token(
-        self, account_id: int, game_token: str
+            self, account_id: int, game_token: str
     ) -> Union[GameTokenInfo, int]:
         _data = {
             'account_id': account_id,
@@ -1199,12 +1207,12 @@ class MysApi(BaseMysApi):
 
         async with ClientSession() as client:
             async with client.request(
-                method='POST',
-                url=url,
-                headers=header,
-                json=data,
-                proxy=proxy,
-                timeout=300,
+                    method='POST',
+                    url=url,
+                    headers=header,
+                    json=data,
+                    proxy=proxy,
+                    timeout=300,
             ) as resp:
                 raw_data = await resp.json()
                 if 'retcode' in raw_data and raw_data['retcode'] == 0:
@@ -1255,10 +1263,10 @@ class MysApi(BaseMysApi):
         return cast(List[MysGoods], resp['data']['goods_list'])
 
     async def topup(
-        self,
-        uid: str,
-        goods: MysGoods,
-        method: Literal['weixin', 'alipay'] = 'alipay',
+            self,
+            uid: str,
+            goods: MysGoods,
+            method: Literal['weixin', 'alipay'] = 'alipay',
     ) -> Union[int, MysOrder]:
         device_id = str(uuid.uuid4())
         HEADER = copy.deepcopy(self._HEADER)
@@ -1309,7 +1317,7 @@ class MysApi(BaseMysApi):
         return cast(MysOrder, resp['data'])
 
     async def check_order(
-        self, order: MysOrder, uid: str
+            self, order: MysOrder, uid: str
     ) -> Union[int, MysOrderCheck]:
         HEADER = copy.deepcopy(self._HEADER)
         ck = await self.get_ck(uid, 'OWNER')
