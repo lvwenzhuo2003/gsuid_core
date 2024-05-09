@@ -11,8 +11,9 @@ CONIFG_DEFAULT: Dict[str, GSC] = {
     ),
     'Gproxy': GsStrConfig('设置米游社国际代理', '设置国际服的代理地址', ''),
     'Nproxy': GsStrConfig('设置米游社常规代理', '设置常规的代理地址', ''),
-    '_pass_API_secret': GsStrConfig('神奇API secret', '设置某种神奇的API secret', ''),
-    '_pass_API_url': GsStrConfig('神奇API url', '设置某种神奇的API url', ''),
+    '_pass_API_secret': GsStrConfig('验证码绕过程序API secret', '设置验证码绕过程序API secret', ''),
+    '_pass_API_url': GsStrConfig('Removed. Keep this setting for compatibility', 'Removed. Keep this setting for '
+                                                                                 'compatibility', ''),
     'restart_command': GsStrConfig(
         '重启命令',
         '自定义使用gs重启时触发的控制台命令(看不懂勿改)',
@@ -24,14 +25,14 @@ CONIFG_DEFAULT: Dict[str, GSC] = {
         True,
     ),
     'CaptchaPass': GsBoolConfig(
-        '神奇功能',
-        '设置某种神奇的功能',
-        False,
+        '签到验证码绕过',
+        '米游社签到验证码绕过开关',
+        True,
     ),
     'MysPass': GsBoolConfig(
-        '神奇功能',
-        '设置某种神奇的功能',
-        False,
+        '米游社验证码绕过',
+        '米游社其他功能验证码绕过开关',
+        True,
     ),
     'AutoUpdateCore': GsBoolConfig(
         '自动更新Core',
