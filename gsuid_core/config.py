@@ -7,6 +7,7 @@ CONFIG_PATH = Path(__file__).parent / 'config.json'
 CONFIG_DEFAULT = {
     'HOST': 'localhost',
     'PORT': '8765',
+    'ENABLE_HTTP': False,
     'masters': [],
     'superusers': [],
     'misfire_grace_time': 90,
@@ -25,7 +26,7 @@ STR_CONFIG = Literal['HOST', 'PORT']
 INT_CONFIG = Literal['misfire_grace_time']
 LIST_CONFIG = Literal['superusers', 'masters', 'command_start']
 DICT_CONFIG = Literal['sv', 'log', 'plugins']
-BOOL_CONFIG = Literal['enable_empty_start']
+BOOL_CONFIG = Literal['enable_empty_start', 'ENABLE_HTTP']
 
 plugins_sample = {
     'name': '',
