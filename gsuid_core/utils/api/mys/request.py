@@ -4,12 +4,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 import time
+from copy import deepcopy
+from typing import Dict, List, Union, Optional, cast
 import uuid
 import random
 from abc import abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from string import digits, ascii_letters
 from typing import (
     Any,
@@ -33,6 +37,7 @@ from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
 from .bbs_request import BBSMysApi
 
 from .api import _API
+from .sign_request import SignMysApi
 from .tools import (
     random_hex,
     mys_version,
@@ -43,6 +48,7 @@ from .tools import (
     get_web_ds_token,
     generate_passport_ds,
 )
+from .tools import get_ds_token, generate_os_ds
 from .models import (
     BsIndex,
     GcgInfo,
@@ -68,7 +74,7 @@ from .models import (
     RolesCalendar,
     CharDetailData,
     CookieTokenInfo,
-    LoginTicketInfo,
+    LoginTicketInfo, ComputeData,
 )
 
 Gproxy = core_plugins_config.get_config('Gproxy').data
@@ -86,6 +92,19 @@ RECOGNIZE_SERVER = {
 }
 
 _DEAD_CODE = [10035, 5003, 10041, 1034]
+
+async def pass_func(gt: str, ch: str, api_secret: str):
+    import anticaptchaofficial.geetestproxyless as geetest
+    solver = geetest.geetestProxyless()
+    solver.set_verbose(1)
+    solver.set_key(api_secret)
+    solver.set_website_url("https://webstatic.mihoyo.com/bbs/event/signin-ys/index.html")
+    solver.set_gt_key(gt)
+    solver.set_challenge_key(ch)
+    result = solver.solve_and_return_solution()
+    if solver.err_string != '':
+        raise ConnectionError(f"An error occurred while resolving the captcha: {solver.err_string}")
+    return result['validate']
 
 
 class BaseMysApi:
@@ -500,36 +519,22 @@ class BaseMysApi:
                 return -999
 
 
-class MysApi(BBSMysApi):
+class MysApi(SignMysApi):
     async def _pass(
             self, gt: str, ch: str, header: Dict
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-        # 免责声明：
-        # 此模块使用了第三方验证码识别服务，该服务由第三方提供，与本模块作者无关。
-        # 此段代码随附在程序中仅供使用者之方便，您可以自愿启用或禁用此模块。
-        # 启用此模块即代表您与您的用户：
-        # 1. 同意将以遵守当地法律法规、遵守《米哈游通行证用户服务协议》(https://user.mihoyo.com/#/agreement)、以及第三方服务商的服务条款为前提使用本模块；
-        # 2. 知晓并同意本模块作者不对任何使用本模块所产生的任何后果负责；
-        # 3. 知晓并同意在使用本模块时，您的部分信息将会被发送至第三方服务商，第三方服务商可能会记录并分享这些信息；
-        # 4. 知晓您可以随时停用本模块，但是本模块一旦停用，您和您的用户将无法使用本模块提供的功能；
-        # 5. 您知晓并同意，鉴于项目的特殊性，作者有权在不另行通知您的情况下删除、修改、停用本模块的部分或全部功能、或终止对本模块的支持；
-        # 6. 您知晓并同意，此免责声明具有法律效力，并且作者有权在不另行通知您的情况下修改此免责声明。
-        # TODO: 请根据你使用的服务文档适当地修改代码
-        # 启用此模块前，请确保 data/core_config.json 中 CaptchaPass, MysPass 已设置为 True，并且 _pass_API_secret 和 _pass_API_url 已设置
-        import anticaptchaofficial.geetestproxyless as geetest
         _pass_api_secret = core_plugins_config.get_config('_pass_API_secret').data
-        solver = geetest.geetestProxyless()
-        solver.set_verbose(1)
-        solver.set_key(_pass_api_secret)
-        solver.set_website_url('https://webstatic.mihoyo.com/bbs/event/signin-ys/index.html')
-        solver.set_gt_key(gt)
-        solver.set_challenge_key(ch)
-        result = solver.solve_and_return_solution()
-        if solver.err_string != '':
-            raise ConnectionError(f'An error occurred while solving the captcha. Error: {solver.err_string}')
-        validate = result['validate']
-        seccode = result['seccode']
-        return validate, ch, seccode
+        if _pass_api_secret:
+            executor = ThreadPoolExecutor(max_workers=1)
+            loop = asyncio.get_running_loop()
+            bypass_captcha_process = loop.run_in_executor(executor,
+                                                          lambda:  pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret))
+            time.sleep(20)
+            validate = await bypass_captcha_process
+        else:
+            validate = None
+
+        return validate, ch
 
     async def _upass(self, header: Dict, is_bbs: bool = False) -> str:
         logger.info('[upass] 进入处理...')
@@ -898,7 +903,7 @@ class MysApi(BBSMysApi):
                 return -51
 
         if int(str(uid)[0]) < 6:
-            HEADER = copy.deepcopy(self._HEADER)
+            HEADER = deepcopy(self._HEADER)
             HEADER['Cookie'] = ck
             HEADER['DS'] = get_ds_token(
                 '',
@@ -919,7 +924,7 @@ class MysApi(BBSMysApi):
                 },
             )
         else:
-            HEADER = copy.deepcopy(self._HEADER_OS)
+            HEADER = deepcopy(self._HEADER_OS)
             HEADER['Cookie'] = ck
             HEADER['DS'] = generate_os_ds()
             data = await self._mys_request(
@@ -949,6 +954,33 @@ class MysApi(BBSMysApi):
         if isinstance(data, Dict):
             data = cast(CalculateInfo, data['data'])
         return data
+
+    async def get_batch_compute_info(
+        self, uid: str, items: Union[List[Dict], List[str], List[int]]
+    ) -> Union[ComputeData, int]:
+        if not items:
+            return -200
+        if isinstance(items[0], Dict):
+            pass
+
+        server_id = self.RECOGNIZE_SERVER.get(uid[0])
+        ck = await self.get_ck(uid, 'OWNER')
+        if ck is None:
+            return -51
+
+        header = deepcopy(self._HEADER)
+        header['Cookie'] = ck
+        data = {
+            'items': items,
+            'region': server_id,
+            'uid': uid,
+        }
+        raw_data = await self._mys_request(
+            self.MAPI['COMPUTE_URL'], 'POST', header, data=data
+        )
+        if isinstance(raw_data, Dict):
+            raw_data = cast(ComputeData, raw_data['data'])
+        return raw_data
 
     async def get_mihoyo_bbs_info(
             self,
