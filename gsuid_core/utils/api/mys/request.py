@@ -7,13 +7,12 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
-import time
-from copy import deepcopy
-from typing import Dict, List, Union, Optional, cast
-import uuid
 import random
+import time
+import uuid
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from string import digits, ascii_letters
 from typing import (
     Any,
@@ -28,27 +27,13 @@ from typing import (
 )
 
 import httpx
-from aiohttp import TCPConnector, ClientSession, ContentTypeError
+from aiohttp import ClientSession, ContentTypeError
 
 from gsuid_core.logger import logger
 from gsuid_core.utils.database.api import DBSqla
 from gsuid_core.utils.database.models import GsUser
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
-from .bbs_request import BBSMysApi
-
 from .api import _API
-from .sign_request import SignMysApi
-from .tools import (
-    random_hex,
-    mys_version,
-    random_text,
-    get_ds_token,
-    generate_os_ds,
-    gen_payment_sign,
-    get_web_ds_token,
-    generate_passport_ds,
-)
-from .tools import get_ds_token, generate_os_ds
 from .models import (
     BsIndex,
     GcgInfo,
@@ -76,6 +61,16 @@ from .models import (
     CookieTokenInfo,
     LoginTicketInfo, ComputeData,
 )
+from .sign_request import SignMysApi
+from .tools import get_ds_token, generate_os_ds
+from .tools import (
+    random_hex,
+    mys_version,
+    random_text,
+    gen_payment_sign,
+    get_web_ds_token,
+    generate_passport_ds,
+)
 
 Gproxy = core_plugins_config.get_config('Gproxy').data
 Nproxy = core_plugins_config.get_config('Nproxy').data
@@ -93,7 +88,8 @@ RECOGNIZE_SERVER = {
 
 _DEAD_CODE = [10035, 5003, 10041, 1034]
 
-async def pass_func(gt: str, ch: str, api_secret: str):
+
+def pass_func(gt: str, ch: str, api_secret: str):
     import anticaptchaofficial.geetestproxyless as geetest
     solver = geetest.geetestProxyless()
     solver.set_verbose(1)
@@ -522,15 +518,39 @@ class BaseMysApi:
 class MysApi(SignMysApi):
     async def _pass(
             self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    ) -> Tuple[Optional[str], Optional[str]]:
         _pass_api_secret = core_plugins_config.get_config('_pass_API_secret').data
         if _pass_api_secret:
-            executor = ThreadPoolExecutor(max_workers=1)
-            loop = asyncio.get_running_loop()
-            bypass_captcha_process = loop.run_in_executor(executor,
-                                                          lambda:  pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret))
-            time.sleep(20)
-            validate = await bypass_captcha_process
+            vl = pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret)
+            validate = vl
+
+            #executor = ThreadPoolExecutor(max_workers=1)
+            #loop = asyncio.get_running_loop()
+            #bypass_captcha_process = loop.run_in_executor(executor,
+            #                                              lambda: pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret))
+            #timer = 0
+            #while True:
+            #    time.sleep(1)
+            #    if bypass_captcha_process.done():
+            #        break
+            #    elif timer == 20:
+            #        raise ConnectionError('An error occurred while resolving the captcha: Timeout')
+            #    timer += 1
+            #validate = await bypass_captcha_process.result()
+
+            #with multiprocessing.Manager() as manager:
+            #    parent_conn, child_conn = multiprocessing.Pipe()
+            #    captcha_process = multiprocessing.Process(target=pass_func, args=(gt, ch, _pass_api_secret, child_conn))
+            #    while True:
+            #        captcha_process.start()
+            #        temp = parent_conn.recv()
+            #        captcha_process.join()
+            #        time.sleep(20)
+            #        if temp != "\0":
+            #            validate = temp
+            #        else:
+            #            break
+            #        time.sleep(1)
         else:
             validate = None
 
@@ -956,7 +976,7 @@ class MysApi(SignMysApi):
         return data
 
     async def get_batch_compute_info(
-        self, uid: str, items: Union[List[Dict], List[str], List[int]]
+            self, uid: str, items: Union[List[Dict], List[str], List[int]]
     ) -> Union[ComputeData, int]:
         if not items:
             return -200

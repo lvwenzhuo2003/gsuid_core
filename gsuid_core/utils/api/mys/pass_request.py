@@ -46,24 +46,36 @@ class PassMysApi(BaseMysApi):
     ) -> Tuple[Optional[str], Optional[str]]:
         _pass_api_secret = core_plugins_config.get_config('_pass_API_secret').data
         if _pass_api_secret:
-            #executor = ThreadPoolExecutor(max_workers=1)
-            #loop = asyncio.get_running_loop()
-            #bypass_captcha_process = loop.run_in_executor(executor,
+            vl = pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret)
+            validate = vl
+
+            # executor = ThreadPoolExecutor(max_workers=1)
+            # loop = asyncio.get_running_loop()
+            # bypass_captcha_process = loop.run_in_executor(executor,
             #                                              lambda: pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret))
-            #time.sleep(20)
-            #validate = await bypass_captcha_process
-            with multiprocessing.Manager() as manager:
-                parent_conn, child_conn = multiprocessing.Pipe()
-                captcha_process = multiprocessing.Process(target=pass_func, args=(gt, ch, _pass_api_secret, child_conn))
-                while True:
-                    captcha_process.start()
-                    temp = parent_conn.recv()
-                    captcha_process.join()
-                    if temp != "\0":
-                        validate = temp
-                    else:
-                        break
-                    time.sleep(1)
+            # timer = 0
+            # while True:
+            #    time.sleep(1)
+            #    if bypass_captcha_process.done():
+            #        break
+            #    elif timer == 20:
+            #        raise ConnectionError('An error occurred while resolving the captcha: Timeout')
+            #    timer += 1
+            # validate = await bypass_captcha_process.result()
+
+            # with multiprocessing.Manager() as manager:
+            #    parent_conn, child_conn = multiprocessing.Pipe()
+            #    captcha_process = multiprocessing.Process(target=pass_func, args=(gt, ch, _pass_api_secret, child_conn))
+            #    while True:
+            #        captcha_process.start()
+            #        temp = parent_conn.recv()
+            #        captcha_process.join()
+            #        time.sleep(20)
+            #        if temp != "\0":
+            #            validate = temp
+            #        else:
+            #            break
+            #        time.sleep(1)
         else:
             validate = None
 
