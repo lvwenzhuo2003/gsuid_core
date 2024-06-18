@@ -1,18 +1,15 @@
-import asyncio
-import multiprocessing
-import time
-from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Tuple, Union, Optional, Literal
+from typing import Dict, Union, Optional, Literal
 
 from gsuid_core.logger import logger
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
+from . import resolve_captcha
 from .base_request import BaseMysApi
 from .tools import get_ds_token
 
 ssl_verify = core_plugins_config.get_config('MhySSLVerify').data
 
 
-def pass_func(gt: str, ch: str, api_secret: str, pipe):
+def pass_func(gt: str, ch: str, api_secret: str):
     import anticaptchaofficial.geetestproxyless as geetest
     solver = geetest.geetestProxyless()
     solver.set_verbose(1)
@@ -23,9 +20,7 @@ def pass_func(gt: str, ch: str, api_secret: str, pipe):
     result = solver.solve_and_return_solution()
     if solver.err_string != '':
         raise ConnectionError(f"An error occurred while resolving the captcha: {solver.err_string}")
-    pipe.send(result)
-    pipe.send('\0')
-    pipe.close()
+    return result
 
 
 class PassMysApi(BaseMysApi):
@@ -41,45 +36,11 @@ class PassMysApi(BaseMysApi):
     async def get_ck(self, uid: str, mode: Literal['OWNER', 'RANDOM'] = 'RANDOM') -> Optional[str]:
         return None
 
-    async def _pass(
-            self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]:
+    async def _pass(self, gt: str, ch: str, header: Dict) -> Dict:
         _pass_api_secret = core_plugins_config.get_config('_pass_API_secret').data
         if _pass_api_secret:
-            vl = pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret)
-            validate = vl
+            return await resolve_captcha.solve_captcha(gt, ch, _pass_api_secret, "https://webstatic.mihoyo.com/bbs/event/signin-ys/index.html")
 
-            # executor = ThreadPoolExecutor(max_workers=1)
-            # loop = asyncio.get_running_loop()
-            # bypass_captcha_process = loop.run_in_executor(executor,
-            #                                              lambda: pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret))
-            # timer = 0
-            # while True:
-            #    time.sleep(1)
-            #    if bypass_captcha_process.done():
-            #        break
-            #    elif timer == 20:
-            #        raise ConnectionError('An error occurred while resolving the captcha: Timeout')
-            #    timer += 1
-            # validate = await bypass_captcha_process.result()
-
-            # with multiprocessing.Manager() as manager:
-            #    parent_conn, child_conn = multiprocessing.Pipe()
-            #    captcha_process = multiprocessing.Process(target=pass_func, args=(gt, ch, _pass_api_secret, child_conn))
-            #    while True:
-            #        captcha_process.start()
-            #        temp = parent_conn.recv()
-            #        captcha_process.join()
-            #        time.sleep(20)
-            #        if temp != "\0":
-            #            validate = temp
-            #        else:
-            #            break
-            #        time.sleep(1)
-        else:
-            validate = None
-
-        return validate, ch
 
     async def _upass(self, header: Dict, is_bbs: bool = False) -> str:
         logger.info('[upass] 进入处理...')
@@ -92,7 +53,9 @@ class PassMysApi(BaseMysApi):
         gt = raw_data['data']['gt']
         ch = raw_data['data']['challenge']
 
-        vl, ch = await self._pass(gt, ch, header)
+        result = await self._pass(gt, ch, header)
+        vl = result['solution']['validate']
+        ch = result['solution']['challenge']
 
         if vl:
             await self.get_header_and_vl(header, ch, vl, is_bbs)

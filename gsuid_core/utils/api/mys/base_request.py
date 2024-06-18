@@ -76,7 +76,7 @@ class BaseMysApi:
     @abstractmethod
     async def _pass(
         self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]: ...
+    ) -> Dict: ...
 
     @abstractmethod
     async def get_ck(

@@ -4,14 +4,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import copy
 import json
 import random
 import time
 import uuid
 from abc import abstractmethod
-from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from string import digits, ascii_letters
 from typing import (
@@ -33,6 +31,7 @@ from gsuid_core.logger import logger
 from gsuid_core.utils.database.api import DBSqla
 from gsuid_core.utils.database.models import GsUser
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
+from . import resolve_captcha
 from .api import _API
 from .models import (
     BsIndex,
@@ -137,7 +136,7 @@ class BaseMysApi:
     @abstractmethod
     async def _pass(
             self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]:
+    ) -> Dict:
         ...
 
     @abstractmethod
@@ -516,47 +515,12 @@ class BaseMysApi:
 
 
 class MysApi(SignMysApi):
-    async def _pass(
-            self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]:
+    async def _pass(self, gt: str, ch: str, header: Dict) -> Tuple[Optional[str], Optional[str]]:
         _pass_api_secret = core_plugins_config.get_config('_pass_API_secret').data
         if _pass_api_secret:
-            vl = pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret)
-            validate = vl
+            return await resolve_captcha.solve_captcha(gt, ch, _pass_api_secret, "https://webstatic.mihoyo.com/bbs/event/signin-ys/index.html")
 
-            #executor = ThreadPoolExecutor(max_workers=1)
-            #loop = asyncio.get_running_loop()
-            #bypass_captcha_process = loop.run_in_executor(executor,
-            #                                              lambda: pass_func(gt=gt, ch=ch, api_secret=_pass_api_secret))
-            #timer = 0
-            #while True:
-            #    time.sleep(1)
-            #    if bypass_captcha_process.done():
-            #        break
-            #    elif timer == 20:
-            #        raise ConnectionError('An error occurred while resolving the captcha: Timeout')
-            #    timer += 1
-            #validate = await bypass_captcha_process.result()
-
-            #with multiprocessing.Manager() as manager:
-            #    parent_conn, child_conn = multiprocessing.Pipe()
-            #    captcha_process = multiprocessing.Process(target=pass_func, args=(gt, ch, _pass_api_secret, child_conn))
-            #    while True:
-            #        captcha_process.start()
-            #        temp = parent_conn.recv()
-            #        captcha_process.join()
-            #        time.sleep(20)
-            #        if temp != "\0":
-            #            validate = temp
-            #        else:
-            #            break
-            #        time.sleep(1)
-        else:
-            validate = None
-
-        return validate, ch
-
-    async def _upass(self, header: Dict, is_bbs: bool = False) -> str:
+    async def _upass(self, header: Dict, is_bbs: bool = False) -> Dict:
         logger.info('[upass] 进入处理...')
         if is_bbs:
             raw_data = await self.get_bbs_upass_link(header)
@@ -567,8 +531,14 @@ class MysApi(SignMysApi):
         gt = raw_data['data']['gt']
         ch = raw_data['data']['challenge']
         try:
-            vl, ch, seccode = await self._pass(gt, ch, header)
+            #vl, ch, seccode = await self._pass(gt, ch, header)
+            result = await self._pass(gt, ch, header)
+            vl = result['solution']['validate']
+            ch = result['solution']['challenge']
+            seccode = f'{vl}|jordan'
         except ConnectionError:
+            return ''
+        except KeyError:
             return ''
 
         if vl:

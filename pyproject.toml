@@ -13,7 +13,6 @@ packages = [{include = "gsuid_core"}]
 "Bug Tracker" = "https://github.com/Genshin-bots/gsuid-core/issues"
 
 [tool.poetry.dependencies]
-anticaptchaofficial = ">=1.0.58"
 python = "^3.8.1"
 httpx = ">=0.23.0"
 beautifulsoup4 = ">=4.11.1"
