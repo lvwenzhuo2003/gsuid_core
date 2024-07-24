@@ -1,0 +1,9 @@
+[submodule "gsuid_core/plugins/GenshinUID"]
+	path = gsuid_core/plugins/GenshinUID
+	url = git@github.com:lvwenzhuo2003/GenshinUID.git
+[submodule "gsuid_core/plugins/StarRailUID"]
+	path = gsuid_core/plugins/StarRailUID
+	url = git@github.com:lvwenzhuo2003/StarRailUID.git
+[submodule "gsuid_core/plugins/ZZZeroUID"]
+	path = gsuid_core/plugins/ZZZeroUID
+	url = git@github.com:lvwenzhuo2003/ZZZeroUID.git
