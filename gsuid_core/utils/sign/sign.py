@@ -33,6 +33,17 @@ async def sign_error(uid: str, retcode: int, game_name: str = 'gs') -> str:
 
 
 async def sign_in(uid: str, game_name: str = 'gs') -> str:
+
+    # 检查验证码系统余额
+    if core_plugins_config.get_config('CaptchaPass').data:
+        logger.info(f'[签到] 正在检查验证码系统余额...')
+        from gsuid_core.utils.api.mys.pass_request import PassMysApi
+        pass_mys_api = PassMysApi()
+        balance = await pass_mys_api.get_pass_api_balance(api_key=core_plugins_config.get_config("_pass_API_key").data)
+        logger.info(f'[签到] 当前验证码系统余额: US${balance}')
+    else:
+        balance = "未开启验证码绕过"
+
     _gn = GAME_NAME_MAP.get(game_name, '未知游戏')
     sign_title = f'[{_gn}] [签到]'
     logger.info(f'{sign_title} {uid} 开始执行签到')
@@ -48,7 +59,7 @@ async def sign_in(uid: str, game_name: str = 'gs') -> str:
         day_of_month = int(sign_info['today'].split('-')[-1])
         signed_count = int(sign_info['total_sign_day'])
         sign_missed = day_of_month - signed_count
-        return f'[{game_name}] UID{uid}今日已签到！本月漏签次数：{sign_missed}'
+        return f'[{game_name}] UID{uid}今日已签到！本月漏签次数：{sign_missed}\n当前验证码系统余额：US${balance}'
 
     # 实际进行签到
     Header = {}
@@ -97,7 +108,7 @@ async def sign_in(uid: str, game_name: str = 'gs') -> str:
                 break
         elif is_os and (sign_data['code'] == 'ok'):
             # 国际服签到无risk_code字段
-            logger.info(f'[国际服签到] {uid} 签到成功!')
+            logger.info(f'[国际服签到] {uid} 签到成功!\n验证码系统余额: US${balance}')
             break
         else:
             # 重试超过阈值
@@ -129,7 +140,7 @@ async def sign_in(uid: str, game_name: str = 'gs') -> str:
         mes_im = '签到失败...'
         sign_missed -= 1
     sign_missed = sign_info.get('sign_cnt_missed') or sign_missed
-    im = f'{mes_im}!\n{get_im}\n本月漏签次数：{sign_missed}'
+    im = f'{mes_im}!\n{get_im}\n本月漏签次数：{sign_missed}\n当前验证码系统余额：US${balance}'
     logger.info(
         f'✅ {sign_title} UID{uid} 签到完成!\n📝结果: {mes_im}\n🚨漏签次数: {sign_missed}'
     )

@@ -6,11 +6,11 @@ import string
 import hashlib
 from typing import Any, Dict, Optional
 
-mys_version = "2.71.1"
+mys_version = "2.72.2"
 _S = {
-    '2.71.1': {
-        "K2": "rtvTthKxEyreVXQCnhluFgLXPOFKPHlA",
-        "LK2": "EJncUPGnOHajenjLhBOsdpwEMZmiCmQX",
+    '2.72.2': {
+        "K2": "KsQAfcXzHdMjoQQqjnPXVTXAygltZbSI",
+        "LK2": "tQURIpqhPqvFBNLHqoioILMifLtnyjIt",
         '22': 't0qEgfub6cvueAPgR5m9aQWWVciEer7v',
         '25': 'xV8v4Qu54lUKrEYFZkJhB8cuOh9Asafs',
     },

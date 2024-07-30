@@ -2,7 +2,7 @@ from typing import Dict
 
 from .models import GSC, GsStrConfig, GsBoolConfig, GsListStrConfig
 
-CONIFG_DEFAULT: Dict[str, GSC] = {
+CONFIG_DEFAULT: Dict[str, GSC] = {
     'StartVENV': GsStrConfig(
         '设置启动环境工具',
         '可选pdm, poetry, pip, auto',
@@ -11,7 +11,7 @@ CONIFG_DEFAULT: Dict[str, GSC] = {
     ),
     'Gproxy': GsStrConfig('设置米游社国际代理', '设置国际服的代理地址', ''),
     'Nproxy': GsStrConfig('设置米游社常规代理', '设置常规的代理地址', ''),
-    '_pass_API': GsStrConfig('神奇API', '设置某种神奇的API', ''),
+    '_pass_API_key': GsStrConfig('神奇API密钥', '设置某种神奇的API密钥', ''),
     'is_use_custom_restart_command': GsBoolConfig(
         '使用自定义重启命令',
         '是否使用下面的自定义重启命令, 否则自动判断环境',
@@ -28,14 +28,14 @@ CONIFG_DEFAULT: Dict[str, GSC] = {
         True,
     ),
     'CaptchaPass': GsBoolConfig(
-        '失效项',
-        '该选项已经无效且可能有一定危险性...',
-        False,
+        '神奇功能',
+        '神奇功能，可能有一定危险性...',
+        True,
     ),
     'MysPass': GsBoolConfig(
-        '无效项',
-        '该选项已经无效且可能有一定危险性...',
-        False,
+        '神奇功能',
+        '神奇功能，可能有一定危险性...',
+        True,
     ),
     'AutoUpdateCore': GsBoolConfig(
         '自动更新Core',
@@ -124,7 +124,7 @@ CONIFG_DEFAULT: Dict[str, GSC] = {
     'UseCRLFReplaceLFForMD': GsBoolConfig(
         '发送MD时使用CR替换LF',
         '发送MD时使用CR替换LF',
-        True,
+        False,
     ),
     'SplitMDAndButtons': GsBoolConfig(
         '发送MD消息时将按钮分开发送',

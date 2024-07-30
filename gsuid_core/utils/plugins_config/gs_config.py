@@ -6,12 +6,12 @@ from msgspec import json as msgjson
 from gsuid_core.logger import logger
 from gsuid_core.data_store import get_res_path
 
-from .sp_config import SP_CONIFG
-from .config_default import CONIFG_DEFAULT
-from .pic_gen_config import PIC_GEN_CONIFG
+from .sp_config import SP_CONFIG
+from .config_default import CONFIG_DEFAULT
+from .pic_gen_config import PIC_GEN_CONFIG
 from .security_config import SECURITY_CONFIG
-from .send_pic_config import SEND_PIC_CONIFG
-from .pic_server_config import PIC_UPLOAD_CONIFG
+from .send_pic_config import SEND_PIC_CONFIG
+from .pic_server_config import PIC_UPLOAD_CONFIG
 from .models import (
     GSC,
     GsStrConfig,
@@ -84,14 +84,14 @@ class StringConfig:
             )
         # 对没有的值，添加默认值
         for key in self.config_list:
-            _defalut = self.config_list[key]
+            _default = self.config_list[key]
             if key not in self.config:
-                self.config[key] = _defalut
+                self.config[key] = _default
             else:
-                if isinstance(_defalut, GsStrConfig) or isinstance(
-                    _defalut, GsListStrConfig
+                if isinstance(_default, GsStrConfig) or isinstance(
+                    _default, GsListStrConfig
                 ):
-                    self.config[key].options = _defalut.options  # type: ignore
+                    self.config[key].options = _default.options  # type: ignore
 
         # 对默认值没有的值，直接删除
         delete_keys = []
@@ -105,6 +105,7 @@ class StringConfig:
         self.sort_config()
 
     def get_config(self, key: str, default_value: Any = None) -> Any:
+        logger.debug(f'[配置] 配置文件位置：{core_plugins_config.CONFIG_PATH}')
         if key in self.config:
             return self.config[key]
         elif key in self.config_list:
@@ -162,25 +163,25 @@ all_config_list: Dict[str, StringConfig] = {}
 core_plugins_config = StringConfig(
     'Core',
     RES / 'core_config.json',
-    CONIFG_DEFAULT,
+    CONFIG_DEFAULT,
 )
 
 pic_upload_config = StringConfig(
     'GsCore图片上传',
     RES / 'pic_upload_config.json',
-    PIC_UPLOAD_CONIFG,
+    PIC_UPLOAD_CONFIG,
 )
 
 send_pic_config = StringConfig(
     'GsCore发送图片',
     RES / 'send_pic_config.json',
-    SEND_PIC_CONIFG,
+    SEND_PIC_CONFIG,
 )
 
 pic_gen_config = StringConfig(
     'GsCore图片生成',
     RES / 'pic_gen_config.json',
-    PIC_GEN_CONIFG,
+    PIC_GEN_CONFIG,
 )
 
 send_security_config = StringConfig(
@@ -192,5 +193,5 @@ send_security_config = StringConfig(
 sp_config = StringConfig(
     'GsCore杂项配置',
     RES / 'sp_config.json',
-    SP_CONIFG,
+    SP_CONFIG,
 )

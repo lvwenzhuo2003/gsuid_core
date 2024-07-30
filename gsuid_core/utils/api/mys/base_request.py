@@ -5,6 +5,7 @@ import json
 import time
 import uuid
 import random
+from datetime import datetime
 from string import digits
 from abc import abstractmethod
 from typing import Any, Dict, Tuple, Union, Literal, Optional, overload
@@ -29,7 +30,6 @@ from .tools import (
 )
 
 _DEAD_CODE = [10035, 5003, 10041, 1034]
-
 
 Gproxy = core_plugins_config.get_config('Gproxy').data
 Nproxy = core_plugins_config.get_config('Nproxy').data
@@ -64,12 +64,14 @@ class BaseMysApi:
     dbsqla: DBSqla = DBSqla()
 
     @abstractmethod
-    async def _upass(self, header: Dict) -> str: ...
+    async def _upass(self, header: Dict) -> str:
+        ...
 
     @abstractmethod
     async def _pass(
         self, gt: str, ch: str, header: Dict
-    ) -> Tuple[Optional[str], Optional[str]]: ...
+    ) -> Tuple[Optional[str], Optional[str]]:
+        ...
 
     async def get_uid(
         self,
@@ -234,18 +236,80 @@ class BaseMysApi:
         seed_id: str,
         seed_time: str,
     ) -> str:
+        info = {
+            "device_id": str(uuid.uuid4()),
+            "product": "RandomProd",
+            "device_name": "RandomDeviceName",
+            "seed_id": str(uuid.uuid4()),
+            "seed_time": str(int(datetime.now().timestamp() * 1000)),
+            "device_fp": "0000000000000",
+        }
         device_brand = device_info.split('/')[0]
-        ext_fields = f'''{{"cpuType":"arm64-v8a","romCapacity":"512","productName":"{device}","romRemain":"422","manufacturer":"{device_brand}","appMemory":"512","hostname":"dg02-pool03-kvm87","screenSize":"1264x2640","osVersion":"13","aaid":"{self.generate_ID()}","vendor":"中国联通","accelerometer":"0.44027936x7.256833x6.422336","buildTags":"release-keys","model":"{model_name}","brand":"XiaoMi","oaid":"{oaid}","hardware":"qcom","deviceType":"{device_type}","devId":"REL","serialNumber":"unknown","buildTime":"1687848011000","buildUser":"root","ramCapacity":"469679","magnetometer":"20.081251x-27.487501x2.1937501","display":"{model_name}_13.1.0.181(CN01)","ramRemain":"215344","deviceInfo":"{device_info}","gyroscope":"0.030226856x0.014647375x0.010652636","vaid":"{self.generate_ID()}","buildType":"user","sdkVersion":"33","board":"{board}"}}'''  # noqa
+        ext_fields = {
+            "proxyStatus": 0,
+            "isRoot": 0,
+            "romCapacity": "512",
+            "deviceName": info["device_name"],
+            "productName": info["product"],
+            "romRemain": "512",
+            "hostname": "dg02-pool03-kvm87",
+            "screenSize": "1440x2905",
+            "isTablet": 0,
+            "aaid": "",
+            "model": info["device_name"],
+            "brand": "Xiaomi",
+            "hardware": "qcom",
+            "deviceType": "OP5913L1",
+            "devId": "unknown",
+            "serialNumber": "unknown",
+            "sdCardCapacity": 512215,
+            "buildTime": "1693626947000",
+            "buildUser": "android-build",
+            "simState": "5",
+            "ramRemain": "239814",
+            "appUpdateTimeDiff": 1702604034882,
+            "deviceInfo": f"XiaoMi {info["device_name"]}OP5913L1: 13SKQ1.221119.001T.118e6c7 - 5aa23 - 73911: userrelease - keys",
+            "vaid": "",
+            "buildType": "user",
+            "sdkVersion": "34",
+            "ui_mode": "UI_MODE_TYPE_NORMAL",
+            "isMockLocation": 0,
+            "cpuType": "arm64-v8a",
+            "isAirMode": 0,
+            "ringMode": 2,
+            "chargeStatus": 1,
+            "manufacturer": "XiaoMi",
+            "emulatorStatus": 0,
+            "appMemory": "512",
+            "osVersion": "14",
+            "vendor": "unknown",
+            "accelerometer": "1.4883357x9.80665x-0.1963501",
+            "sdRemain": 239600,
+            "buildTags": "release-keys",
+            "packageName": "com.mihoyo.hyperion",
+            "networkType": "WiFi",
+            "oaid": "",
+            "debugStatus": 1,
+            "ramCapacity": "469679",
+            "magnetometer": "20.081251x-27.457501x2.1937501",
+            "display": f"{info["product"]}_13.1.0.181(CN01)",
+            "appInstallTimeDiff": 1688455751496,
+            "packageVersion": self.mysVersion,
+            "gyroscope": "0.030226856x-0.014647375x-0.0013732915",
+            "batteryStatus": 100,
+            "hasKeyboard": 0,
+            "board": "taro",
+        }
 
         body = {
-            'device_id': self.generate_seed(16),
-            'seed_id': seed_id,  # uuid4
-            'platform': '2',
-            'seed_time': seed_time,
-            'ext_fields': ext_fields,
-            'app_name': 'bbs_cn',
-            'bbs_device_id': device_id,
-            'device_fp': self.generate_random_fp(),
+            "device_id": info['device_id'],
+            "seed_id": info['seed_id'],
+            "platform": "2",
+            "seed_time": info['seed_time'],
+            "ext_fields": json.dumps(ext_fields),
+            "app_name": "bbs_cn",
+            "bbs_device_id": info['device_id'],
+            "device_fp": info['device_fp'],
         }
 
         HEADER = copy.deepcopy(self._HEADER)
@@ -386,12 +450,14 @@ class BaseMysApi:
     @overload
     async def ck_in_new_device(
         self, uid: str, app_cookie: str
-    ) -> Tuple[str, str, str, str]: ...
+    ) -> Tuple[str, str, str, str]:
+        ...
 
     @overload
     async def ck_in_new_device(
         self, uid: str, app_cookie: Optional[str] = None
-    ) -> Optional[Tuple[str, str, str, str]]: ...
+    ) -> Optional[Tuple[str, str, str, str]]:
+        ...
 
     async def ck_in_new_device(
         self, uid: str, app_cookie: Optional[str] = None
@@ -529,11 +595,13 @@ class BaseMysApi:
 
                     if core_plugins_config.get_config('MysPass').data:
                         pass_header = copy.deepcopy(header)
-                        ch = await self._upass(pass_header)
-                        if ch == '':
+                        vl, ch = await self._upass(pass_header)
+                        if vl == '':
                             return 114514
                         else:
                             header['x-rpc-challenge'] = ch
+                            header['x-rpc-validate'] = vl
+                            header['x-rpc-seccode'] = f'{vl}|jordan'
 
                     if 'DS' in header:
                         if isinstance(params, Dict):
@@ -541,9 +609,9 @@ class BaseMysApi:
                                 [
                                     f'{k}={v}'
                                     for k, v in sorted(
-                                        params.items(),
-                                        key=lambda x: x[0],
-                                    )
+                                    params.items(),
+                                    key=lambda x: x[0],
+                                )
                                 ]
                             )
                         else:
