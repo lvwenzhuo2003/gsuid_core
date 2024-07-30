@@ -31,6 +31,7 @@ class S3:
         async with self.session.client(
             's3',
             endpoint_url=END_POINT,
+            config=aioboto3.session.AioConfig(signature_version='s3v4'),
         ) as s3:  # type: ignore
             logger.info('[S3 / upload] 开始上传...')
 
@@ -51,7 +52,7 @@ class S3:
             logger.debug(data)
             logger.info('[S3 / upload] 上传成功！')
             if is_auto_delete:
-                asyncio.create_task(self.delete(key))
+                await asyncio.create_task(self.delete(key))
 
         path = f'{END_POINT}/{self.bucket_id}/{key}'
         logger.debug(f'[S3 / upload] PATH: {path}')
