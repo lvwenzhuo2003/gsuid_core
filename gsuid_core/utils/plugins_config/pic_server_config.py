@@ -2,12 +2,12 @@ from typing import Dict
 
 from .models import GSC, GsStrConfig, GsBoolConfig
 
-PIC_UPLOAD_CONIFG: Dict[str, GSC] = {
-    'PicUpload': GsBoolConfig('自动上传图片', '发送图片时将会自动上传', False),
+PIC_UPLOAD_CONFIG: Dict[str, GSC] = {
+    'PicUpload': GsBoolConfig('自动上传图片', '发送图片时将会自动上传', True),
     'PicUploadServer': GsStrConfig(
         '上传图片方式',
         '可选s3或smms或custom',
-        'smms',
+        's3',
         ['smms', 's3', 'custom'],
     ),
     'AutoDelete': GsBoolConfig('上传完后自动删除', '是否自动删除图片', True),
