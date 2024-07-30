@@ -2,7 +2,7 @@ from typing import Dict
 
 from .models import GSC, GsStrConfig
 
-SEND_PIC_CONIFG: Dict[str, GSC] = {
+SEND_PIC_CONFIG: Dict[str, GSC] = {
     'onebot': GsStrConfig(
         'OneBot图片发送方式',
         '可选link或base64',
