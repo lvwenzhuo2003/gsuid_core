@@ -8,7 +8,7 @@ from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
 from .base_request import BaseMysApi
 from .tools import get_ds_token
 
-client = httpx.AsyncClient()
+
 
 ssl_verify = core_plugins_config.get_config('MhySSLVerify').data
 
@@ -19,21 +19,23 @@ class PassMysApi(BaseMysApi):
         logger.info("[upass]发送请求...")
         logger.debug(f"[upass]请求方法：{method}，请求数据：{data}")
         try:
-            response = await client.post(url, json=data)
+            client = httpx.AsyncClient()
+            response = await client.post(url=url, json=data, timeout=30)
             response.raise_for_status()
             logger.trace(f"[upass]请求返回：{response.text}")
+            await client.aclose()
             return response.json()
         except httpx.HTTPStatusError as err:
-            logger.error(f"[upass]遭遇HTTP错误，状态码：{err.response.status_code}，错误内容：{err.response.text}")
+            logger.error(f"[upass]遭遇HTTP错误，状态码：{str(err.response.status_code)}，错误内容：{str(err.response.text)}")
             return 255
-        except httpx.ConnectTimeout:
-            logger.error("[upass]连接超时")
+        except httpx.ConnectTimeout as err:
+            logger.error(f"[upass]连接超时，错误内容{str(err)}")
             return 254
-        except httpx.ReadTimeout:
-            logger.error("[upass]读取超时")
+        except httpx.ReadTimeout as err:
+            logger.error(f"[upass]读取超时，错误内容{str(err)}")
             return 253
         except httpx.NetworkError as err:
-            logger.error(f"[upass]网络错误：{err}")
+            logger.error(f"[upass]网络错误：{str(err)}")
             return 251
         except Exception as e:
             logger.error(f"[upass]未知错误：{str(e)}")
