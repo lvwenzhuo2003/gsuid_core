@@ -2,6 +2,7 @@ import random
 import asyncio
 from typing import Dict, List
 
+from gsuid_core.bot import Bot
 from gsuid_core.logger import logger
 from gsuid_core.segment import MessageSegment
 from gsuid_core.utils.api.mys_api import mys_api
@@ -32,7 +33,7 @@ async def sign_error(uid: str, retcode: int, game_name: str = 'gs') -> str:
     return f'[{game_name}] 签到失败!{error_msg}'
 
 
-async def sign_in(uid: str, game_name: str = 'gs') -> str:
+async def sign_in(uid: str, game_name: str = 'gs', bot: Bot = None) -> str:
 
     # 检查验证码系统余额
     if core_plugins_config.get_config('CaptchaPass').data:
@@ -73,6 +74,7 @@ async def sign_in(uid: str, game_name: str = 'gs') -> str:
             # 出现校验码
             if sign_data['risk_code'] in [375, 5001]:
                 if core_plugins_config.get_config('CaptchaPass').data:
+                    await bot.send("签到出现验证码, 正在尝试绕过...")
                     gt = sign_data['gt']
                     ch = sign_data['challenge']
                     vl, ch = await mys_api._pass(gt, ch, Header)
@@ -81,6 +83,7 @@ async def sign_in(uid: str, game_name: str = 'gs') -> str:
                         Header['x-rpc-challenge'] = ch
                         Header['x-rpc-validate'] = vl
                         Header['x-rpc-seccode'] = f'{vl}|jordan'
+                        await bot.send("验证码已获取")
                         logger.info(
                             f'{sign_title} {uid} 已获取验证码, 等待时间{delay}秒'
                         )
