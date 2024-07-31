@@ -31,7 +31,7 @@ _CHAR_HINT = f'请先使用【{_start}强制刷新】命令来缓存数据! \n�
 
 CHAR_HINT = '你还没有{}的缓存噢！\n' + _CHAR_HINT
 
-VERIFY_HINT = f'''出现验证码!请进行[{_start}绑定设备]以解除风险！'''
+VERIFY_HINT = f'''验证码绕过失败！\n请执行[{_start}刷新ck]以刷新ck信息\n如反复出现此提示，请进行[{_start}绑定设备]以解除风险'''
 
 SK_HINT = (
     '你还没有绑定过Stoken或者Stoken已失效~\n'
