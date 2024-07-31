@@ -6,13 +6,15 @@ import string
 import hashlib
 from typing import Any, Dict, Optional
 
-mys_version = "2.72.2"
+mys_version = "2.71.1"
 _S = {
-    '2.72.2': {
-        "K2": "KsQAfcXzHdMjoQQqjnPXVTXAygltZbSI",
-        "LK2": "tQURIpqhPqvFBNLHqoioILMifLtnyjIt",
-        '22': 't0qEgfub6cvueAPgR5m9aQWWVciEer7v',
-        '25': 'xV8v4Qu54lUKrEYFZkJhB8cuOh9Asafs',
+    # To Update K2, LK2, os, PD, please track https://github.com/UIGF-org/mihoyo-api-collect/issues/1
+    # Strongly recommend to keep up to date with recent 10 versions
+    '2.71.1': {
+        "K2": "rtvTthKxEyreVXQCnhluFgLXPOFKPHlA",
+        "LK2": "EJncUPGnOHajenjLhBOsdpwEMZmiCmQX",
+        '22': 't0qEgfub6cvueAPgR5m9aQWWVciEer7v',  # 6X
+        '25': 'xV8v4Qu54lUKrEYFZkJhB8cuOh9Asafs',  # 4X
     },
     'os': '6cqshh5dhw73bzxn20oexa9k516chk7s',
     'PD': 'JwYDpKvLj6MrMqqYU6jTKF17KNO2PXoS',
@@ -20,7 +22,7 @@ _S = {
 
 
 def random_hex(length):
-    result = hex(random.randint(0, 16**length)).replace('0x', '').upper()
+    result = hex(random.randint(0, 16 ** length)).replace('0x', '').upper()
     if len(result) < length:
         result = '0' * (length - len(result)) + result
     return result
