@@ -554,7 +554,7 @@ class BaseMysApi:
                     continue
                 except:  # noqa
                     await call_bot().send(
-                        '[mys_request] 请求错误, 请联系Bot主人检查控制台!'
+                        '[mys_request] 请求错误, 请检查日志！'
                     )
                     continue
 
@@ -597,7 +597,7 @@ class BaseMysApi:
                         pass_header = copy.deepcopy(header)
                         vl, ch = await self._upass(pass_header)
                         if vl == '':
-                            return 114514
+                            return ch
                         else:
                             header['x-rpc-challenge'] = ch
                             header['x-rpc-validate'] = vl

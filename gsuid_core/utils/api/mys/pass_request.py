@@ -116,8 +116,10 @@ class PassMysApi(BaseMysApi):
                                               website_url="https://api-takumi.mihoyo.com/event/luna/sign")
             if validate == 1:
                 validate = None
+                ch = self.err_string
         else:
             validate = None
+            ch = self.err_string
         return validate, ch
 
     async def _upass(self, header: Dict, is_bbs: bool = False) -> str | tuple[str, str]:

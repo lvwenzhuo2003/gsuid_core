@@ -6,7 +6,7 @@ from gsuid_core.bot import Bot
 from gsuid_core.logger import logger
 from gsuid_core.segment import MessageSegment
 from gsuid_core.utils.api.mys_api import mys_api
-from gsuid_core.utils.error_reply import get_error
+from gsuid_core.utils.error_reply import get_error, _start
 from gsuid_core.utils.database.models import GsUser
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
 from gsuid_core.utils.boardcast.models import BoardCastMsg, BoardCastMsgDict
@@ -89,11 +89,7 @@ async def sign_in(uid: str, game_name: str = 'gs', bot: Bot = None) -> str:
                         )
                         await asyncio.sleep(delay)
                     else:
-                        delay = 605 + random.randint(1, 120)
-                        logger.info(
-                            f'{sign_title} {uid} 未获取验证码,等待{delay}秒后重试...'
-                        )
-                        await asyncio.sleep(delay)
+                        return f'签到失败，请稍后再试！\n验证码解决服务返回了一个错误：{ch}\n如反复出现错误，请尝试[{_start}刷新ck]以刷新ck并重试！'
                     continue
                 else:
                     logger.info(
@@ -116,7 +112,7 @@ async def sign_in(uid: str, game_name: str = 'gs', bot: Bot = None) -> str:
         else:
             # 重试超过阈值
             logger.warning('{sign_title} 超过请求阈值...')
-            return '签到失败...出现验证码!\n请过段时间使用{sign_title}或由管理员[全部重签]或手动至米游社进行签到！'
+            return f'签到失败...出现验证码!\n请过段时间使用{sign_title}或由管理员[全部重签]或手动至米游社进行签到！'
     # 签到失败
     else:
         im = '签到失败!'
