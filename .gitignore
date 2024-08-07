@@ -671,3 +671,4 @@ gs_restart.sh
 !gsuid_core/utils/backup
 logs
 .pdm-python
+.vscode/*
