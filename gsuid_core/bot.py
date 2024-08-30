@@ -24,6 +24,7 @@ from gsuid_core.segment import (
     MessageSegment,
     to_markdown,
     convert_message,
+    is_split_button,
     check_same_buttons,
     markdown_to_template_markdown,
 )
@@ -37,6 +38,10 @@ ism: List = core_plugins_config.get_config('SendMDPlatform').data
 isb: List = core_plugins_config.get_config('SendButtonsPlatform').data
 isc: List = core_plugins_config.get_config('SendTemplatePlatform').data
 istry: List = core_plugins_config.get_config('TryTemplateForQQ').data
+
+enable_forward: str = core_plugins_config.get_config(
+    'EnableForwardMessage'
+).data
 
 enable_buttons_platform = isb
 enable_markdown_platform = ism
@@ -66,34 +71,71 @@ class _Bot:
         task_id: str = '',
         task_event: Optional[asyncio.Event] = None,
     ):
-        _message = await convert_message(message, bot_id, bot_self_id)
+        _message = await convert_message(
+            message,
+            bot_id,
+            bot_self_id,
+        )
 
         if bot_id in enable_markdown_platform:
-            _message = await to_markdown(_message, None, bot_id)
+            _message = await to_markdown(
+                _message,
+                None,
+                bot_id,
+            )
 
         _message_result = []
+        message_result = []
         _t = []
         for _m in _message:
-            if _m.type in [
-                'markdown',
-                'template_markdown',
-                'template_buttons',
-                'buttons',
-            ]:
+            if (
+                _m.type
+                in [
+                    'markdown',
+                    'template_markdown',
+                ]
+                and is_split_button
+                and _m.data
+                and _m.data.strip()
+            ):
                 _message_result.append([_m])
             else:
                 _t.append(_m)
         _message_result.append(_t)
 
         for mr in _message_result:
+            _temp_mr = []
+            for _m in mr:
+                if _m.type == 'node':
+                    if enable_forward == '禁止(不发送任何消息)':
+                        continue
+                    elif enable_forward == '允许':
+                        _temp_mr.append(_m)
+                    elif enable_forward == '全部拆成单独消息':
+                        for forward_m in _m.data:
+                            if forward_m.type != 'image_size':
+                                message_result.append([forward_m])
+                    elif enable_forward == '合并为一条消息':
+                        _temp_mr.extend(_m.data)
+                    elif enable_forward.isdigit():
+                        for forward_m in _m.data[: int(enable_forward)]:
+                            if forward_m.type != 'image_size':
+                                message_result.append([forward_m])
+                else:
+                    _temp_mr.append(_m)
+            if _temp_mr:
+                message_result.append(_temp_mr)
+
+        if is_sp_msg_id and not msg_id:
+            msg_id = sp_msg_id
+
+        for mr in message_result:
+            logger.trace(f'[GsCore][即将发送消息] {mr}')
             if at_sender and sender_id:
                 mr.append(MessageSegment.at(sender_id))
 
             if group_id:
                 mr.append(Message('group', group_id))
-
-            if is_sp_msg_id and not msg_id:
-                msg_id = sp_msg_id
 
             send = MessageSend(
                 content=mr,
@@ -140,9 +182,14 @@ class Bot:
     mutiply_map: Dict[str, str] = {}
 
     def __init__(self, bot: _Bot, ev: Event):
-        self.gid = ev.group_id if ev.group_id else '0'
         self.uid = ev.user_id if ev.user_id else '0'
-        self.session_id = f'{self.gid}{self.uid}'
+        if ev.user_type != 'direct':
+            self.temp_gid = ev.group_id if ev.group_id else '0'
+        else:
+            self.temp_gid = self.uid
+
+        self.bid = ev.bot_id if ev.bot_id else '0'
+        self.session_id = f'{self.bid}{self.temp_gid}{self.uid}'
 
         self.bot = bot
         self.ev = ev
@@ -356,9 +403,11 @@ class Bot:
             self.mutiply_tag = True
             if self.session_id not in self.mutiply_instances:
                 self.mutiply_instances[self.session_id] = self
-                # 标注群
-                if self.gid not in self.mutiply_map:
-                    self.mutiply_map[self.gid] = self.session_id
+                # 标注临时群ID
+                # 如果消息类型为群则为群号, 如消息类型为私聊则为QQ号
+                if self.temp_gid not in self.mutiply_map:
+                    self.mutiply_map[self.temp_gid] = self.session_id
+
                 self.mutiply_event = asyncio.Event()
 
             while self.mutiply_resp == []:
