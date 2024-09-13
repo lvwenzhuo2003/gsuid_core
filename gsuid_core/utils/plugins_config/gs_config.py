@@ -9,6 +9,7 @@ from gsuid_core.data_store import get_res_path
 from .sp_config import SP_CONFIG
 from .config_default import CONFIG_DEFAULT
 from .pic_gen_config import PIC_GEN_CONFIG
+from .database_config import DATABASE_CONFIG
 from .security_config import SECURITY_CONFIG
 from .send_pic_config import SEND_PIC_CONFIG
 from .pic_server_config import PIC_UPLOAD_CONFIG
@@ -194,4 +195,10 @@ sp_config = StringConfig(
     'GsCore杂项配置',
     RES / 'sp_config.json',
     SP_CONFIG,
+)
+
+database_config = StringConfig(
+    'GsCore数据库配置',
+    RES / 'database_config.json',
+    DATABASE_CONFIG,
 )
