@@ -672,3 +672,7 @@ gs_restart.sh
 logs
 .pdm-python
 .vscode/*
+
+# Remove macOS rubbish
+.DS_Store
+*/.DS_Store
