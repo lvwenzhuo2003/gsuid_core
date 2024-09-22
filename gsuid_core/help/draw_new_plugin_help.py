@@ -1,3 +1,4 @@
+import re
 import random
 from pathlib import Path
 from copy import deepcopy
@@ -11,6 +12,7 @@ from gsuid_core.utils.fonts.fonts import core_font
 from gsuid_core.utils.image.convert import convert_img
 from gsuid_core.utils.plugins_config.gs_config import pic_gen_config
 from gsuid_core.utils.image.image_tools import (
+    CustomizeImage,
     crop_center_img,
     draw_color_badge,
 )
@@ -39,6 +41,24 @@ def find_icon(name: str, icon_path: Path = ICON_PATH):
     return Image.open(_r)
 
 
+def calculate_string_length(s: str):
+    total_length = 0
+    result = ''
+    for char in s:
+        result += char
+        if '\u4e00' <= char <= '\u9fff':
+            total_length += 1
+        elif re.match(r'[A-Za-z0-9]', char):
+            total_length += 0.5
+        elif re.match(r'[^\w\s]', char):
+            total_length += 0.3
+
+        if total_length >= 8:
+            return result
+    else:
+        return result
+
+
 async def get_new_help(
     plugin_name: str,
     plugin_info: Dict[str, str],
@@ -53,6 +73,8 @@ async def get_new_help(
     item_bg: Optional[Image.Image] = None,
     icon_path: Path = ICON_PATH,
     footer: Optional[Image.Image] = None,
+    column: int = 3,
+    need_cover: bool = False,
     enable_cache: bool = True,
 ):
     help_path = get_res_path('help') / f'{plugin_name}.jpg'
@@ -66,11 +88,11 @@ async def get_new_help(
         return await convert_img(Image.open(help_path))
 
     if banner_bg is None:
-        banner_bg = Image.open(TEXT_PATH / 'banner_bg.jpg')
+        banner_bg = Image.open(TEXT_PATH / f'banner_bg_{help_mode}.jpg')
     if help_bg is None:
-        help_bg = Image.open(TEXT_PATH / 'help_bg.jpg')
+        help_bg = Image.open(TEXT_PATH / f'bg_{help_mode}.jpg')
     if cag_bg is None:
-        cag_bg = Image.open(TEXT_PATH / 'cag_bg.png')
+        cag_bg = Image.open(TEXT_PATH / f'cag_bg_{help_mode}.png')
     if footer is None:
         footer = Image.open(TEXT_PATH / f'footer_{help_mode}.png')
     if item_bg is None:
@@ -92,32 +114,29 @@ async def get_new_help(
     plugin_icon = plugin_icon.resize((128, 128))
 
     # 准备计算整体帮助图大小
-    w, h = 1545, 300 + footer.height
+    w, h = 120 + 475 * column, footer.height
 
     cag_num = len(plugin_help)
-    h += cag_num * 100
     for cag in plugin_help:
         cag_data = plugin_help[cag]['data']
         sv_num = len(cag_data)
-        h += (((sv_num - 1) // 3) + 1) * 175
+        h += (((sv_num - 1) // column) + 1) * 175
 
-    # 基准图
-    img = crop_center_img(help_bg, w, h)
-
+    banner_h = banner_bg.size[1]
     # 绘制banner
-    banner_bg.paste(plugin_icon, (89, 88), plugin_icon)
+    banner_bg.paste(plugin_icon, (89, banner_h - 212), plugin_icon)
     banner_draw = ImageDraw.Draw(banner_bg)
 
     _banner_name = plugin_name + '帮助'
     banner_draw.text(
-        (262, 128),
+        (262, banner_h - 172),
         _banner_name,
         main_color,
         font=core_font(50),
         anchor='lm',
     )
     banner_draw.text(
-        (262, 183),
+        (262, banner_h - 117),
         banner_sub_text,
         sub_color,
         font=core_font(30),
@@ -137,11 +156,55 @@ async def get_new_help(
         )
         banner_bg.paste(
             badge,
-            (262 + plugin_name_len + 10, 128 - badge.height // 2),
+            (
+                262 + plugin_name_len + 10,
+                banner_h - 172 - badge.height // 2,
+            ),
             badge,
         )
 
         plugin_name_len += badge.width + 10
+
+    bscale = w / banner_bg.size[0]
+    new_banner_h = int(banner_h * bscale)
+    new_cag_h = int(cag_bg.size[1] * bscale)
+    banner_bg = banner_bg.resize((w, new_banner_h))
+
+    h += new_banner_h
+    soft = 10
+    h += cag_num * (new_cag_h + soft)
+
+    # 基准图
+    img = crop_center_img(help_bg, w, h)
+    if need_cover:
+        color = CustomizeImage.get_bg_color(
+            img, False if help_mode == 'dark' else True
+        )
+        if help_mode == 'light':
+            add_color = 40
+            max_color = 255
+            c0 = color[0] + add_color
+            c0 = c0 if c0 < max_color else max_color
+            c1 = color[1] + add_color
+            c2 = color[2] + add_color
+            c1 = c1 if c1 < max_color else max_color
+            c2 = c2 if c2 < max_color else max_color
+        else:
+            add_color = -40
+            max_color = 0
+            c0 = color[0] + add_color
+            c0 = c0 if c0 > max_color else max_color
+            c1 = color[1] + add_color
+            c2 = color[2] + add_color
+            c1 = c1 if c1 > max_color else max_color
+            c2 = c2 if c2 > max_color else max_color
+        _color = (c0, c1, c2, 190)
+        _color_img = Image.new(
+            'RGBA',
+            (w, h),
+            _color,
+        )
+        img.paste(_color_img, (0, 0), _color_img)
 
     img.paste(banner_bg, (0, 0), banner_bg)
 
@@ -171,7 +234,14 @@ async def get_new_help(
             font=core_font(30),
             anchor='lm',
         )
-        img.paste(cag_bar, (0, 280 + hs), cag_bar)
+
+        cag_bar = cag_bar.resize((w, new_cag_h))
+
+        img.paste(
+            cag_bar,
+            (0, int(new_banner_h + hs - 14 * bscale)),
+            cag_bar,
+        )
 
         for i, command in enumerate(cag_data):
             command_name = command['name']
@@ -179,31 +249,56 @@ async def get_new_help(
             command_eg = command['eg']
             command_bg = deepcopy(item_bg)
 
-            icon = find_icon(command_name, icon_path)
+            if 'icon' in command:
+                if isinstance(command['icon'], Image.Image):
+                    icon: Image.Image = command['icon']
+                else:
+                    icon = Image.open(command['icon'])
+            else:
+                icon = find_icon(command_name, icon_path)
+
+            if icon.width > 200:
+                icon = icon.resize((128, 128))
+                _icon = Image.new('RGBA', (150, 150))
+                _icon.paste(icon, (11, 11), icon)
+                icon = _icon
+            else:
+                icon = icon.resize((150, 150))
             command_bg.paste(icon, (6, 12), icon)
 
             command_draw = ImageDraw.Draw(command_bg)
 
+            _command_name = calculate_string_length(command_name)
+
             command_draw.text(
-                (160, 67),
-                plugin_prefix + command_name,
+                (156, 67),
+                _command_name,
                 main_color,
-                font=core_font(40),
+                font=core_font(38),
                 anchor='lm',
             )
 
             command_draw.text(
-                (160, 116),
+                (156, 116),
                 plugin_prefix + command_eg,
                 sub_color,
                 font=core_font(26),
                 anchor='lm',
             )
 
-            x, y = 45 + (i % 3) * 490, 370 + (i // 3) * 175 + hs
+            x, y = (
+                45 + (i % column) * 490,
+                int(
+                    new_banner_h
+                    + 70 * bscale
+                    + (i // column) * 175
+                    + hs
+                    + soft
+                ),
+            )
             img.paste(command_bg, (x, y), command_bg)
 
-        hs += (((len(cag_data) - 1) // 3) + 1) * 175 + 100
+        hs += (((len(cag_data) - 1) // column) + 1) * 175 + new_cag_h + soft
 
     img.paste(
         footer,
