@@ -62,7 +62,7 @@ class Plugins:
         if name is None:
             raise ValueError('Plugins.name is None!')
 
-        if name in SL.plugins:
+        if name in SL.plugins and not kwargs.get('force'):
             return SL.plugins[name]
         else:
             _plugin = super().__new__(cls)
@@ -70,7 +70,16 @@ class Plugins:
             return _plugin
 
     def __hash__(self) -> int:
-        return hash(f'{self.name}{self.pm}{self.area}')
+        return hash(f'{self.name}{self.priority}{self.pm}{self.area}')
+
+    def __eq__(self, other):
+        if isinstance(other, Plugins):
+            return (self.name, self.pm, self.priority) == (
+                other.name,
+                other.pm,
+                other.priority,
+            )
+        return False
 
     def __init__(
         self,
@@ -82,9 +91,24 @@ class Plugins:
         black_list: List = [],
         white_list: List = [],
         sv: Dict = {},
-        prefix: str = '',
+        prefix: Union[List[str], str] = [],
+        force_prefix: List[str] = [],
+        disable_force_prefix: bool = False,
+        allow_empty_prefix: Optional[bool] = None,
+        force: bool = False,
     ):
         if not self.is_initialized:
+            if isinstance(prefix, str):
+                prefix = [prefix]
+            if allow_empty_prefix is None:
+                _pf = prefix + force_prefix
+                if '' in _pf:
+                    _pf.remove('')
+                if _pf:
+                    allow_empty_prefix = False
+                else:
+                    allow_empty_prefix = True
+
             self.name = name
             self.priority = priority
             self.enabled = enabled
@@ -94,6 +118,9 @@ class Plugins:
             self.white_list = white_list
             self.sv = {}
             self.prefix = prefix
+            self.allow_empty_prefix = allow_empty_prefix
+            self.force_prefix = force_prefix
+            self.disable_force_prefix = disable_force_prefix
             self.is_initialized = True
 
     def set(self, **kwargs):
@@ -169,8 +196,44 @@ class SV:
                 core_config.set_config('plugins', config_plugins)
             else:
                 if 'prefix' not in config_plugins[plugins_name]:
-                    config_plugins[plugins_name]['prefix'] = ''
-                plugins = Plugins(**config_plugins[plugins_name])
+                    if plugins_name in SL.plugins:
+                        config_plugins[plugins_name]['prefix'] = SL.plugins[
+                            plugins_name
+                        ].prefix
+                    else:
+                        config_plugins[plugins_name]['prefix'] = []
+                elif isinstance(config_plugins[plugins_name]['prefix'], str):
+                    if config_plugins[plugins_name]['prefix'] != '':
+                        config_plugins[plugins_name]['prefix'] = [
+                            config_plugins[plugins_name]['prefix']
+                        ]
+                    else:
+                        config_plugins[plugins_name]['prefix'] = []
+
+                if 'allow_empty_prefix' not in config_plugins[plugins_name]:
+                    if plugins_name in SL.plugins:
+                        config_plugins[plugins_name]['allow_empty_prefix'] = (
+                            SL.plugins[plugins_name].allow_empty_prefix
+                        )
+                    else:
+                        config_plugins[plugins_name][
+                            'allow_empty_prefix'
+                        ] = None
+
+                if 'disable_force_prefix' not in config_plugins[plugins_name]:
+                    config_plugins[plugins_name][
+                        'disable_force_prefix'
+                    ] = False
+
+                if plugins_name in SL.plugins:
+                    config_plugins[plugins_name]['force_prefix'] = SL.plugins[
+                        plugins_name
+                    ].force_prefix
+
+                plugins = Plugins(
+                    **config_plugins[plugins_name],
+                    force=True,
+                )
 
                 core_config.set_config('plugins', config_plugins)
 
@@ -270,20 +333,47 @@ class SV:
             else:
                 keyword_list = keyword
 
-            for _k in keyword_list:
-                if prefix:
-                    tr = f'{self.plugins.prefix}{_k}'
-                else:
-                    tr = _k
+            _pp = deepcopy(self.plugins.prefix)
+            if "" in _pp:
+                _pp.remove("")
 
-                if tr not in self.TL:
-                    logger.trace(f'载入{type}触发器【{tr}】!')
+            if self.plugins.allow_empty_prefix:
+                _pp.append("")
+
+            if not self.plugins.disable_force_prefix:
+                for _i in self.plugins.force_prefix:
+                    _pp.append(_i)
+
+            # 去重
+            _pp = list(set(_pp))
+
+            for _k in keyword_list:
+                if _k not in self.TL:
                     if type not in self.TL:
                         self.TL[type] = {}
 
-                    self.TL[type][tr] = Trigger(
-                        type, tr, modify_func(func), block, to_me
-                    )
+                    if prefix and _pp:
+                        for _p in _pp:
+                            _pk = _p + _k
+                            self.TL[type][_pk] = Trigger(
+                                type,
+                                _k,
+                                modify_func(func),
+                                _p,
+                                block,
+                                to_me,
+                            )
+                            logger.trace(f'载入{type}触发器【{_pk}】!')
+                    else:
+                        self.TL[type][_k] = Trigger(
+                            type,
+                            _k,
+                            modify_func(func),
+                            "",
+                            block,
+                            to_me,
+                        )
+                        logger.trace(f'载入{type}触发器【{_k}】!')
 
             @wraps(func)
             async def wrapper(bot: Bot, msg) -> Optional[Callable]:
@@ -367,3 +457,39 @@ class SV:
         if unique_id is None:
             unique_id = str(uuid.uuid4())
         return self._on('message', unique_id, block, to_me, prefix)
+
+
+def get_plugin_prefixs(plugin_name: str) -> List[str]:
+    plugin = SL.plugins.get(plugin_name)
+    if plugin is None:
+        raise ValueError(f'插件{plugin_name}不存在!')
+    return plugin.prefix
+
+
+def get_plugin_prefix(plugin_name: str) -> str:
+    return get_plugin_prefixs(plugin_name)[0]
+
+
+def get_plugin_force_prefixs(plugin_name: str) -> List[str]:
+    plugin = SL.plugins.get(plugin_name)
+    if plugin is None:
+        raise ValueError(f'插件{plugin_name}不存在!')
+    return plugin.force_prefix
+
+
+def get_plugin_force_prefix(plugin_name: str) -> str:
+    return get_plugin_force_prefixs(plugin_name)[0]
+
+
+def get_plugin_available_prefix(plugin_name: str) -> str:
+    plugin = SL.plugins.get(plugin_name)
+    if plugin is None:
+        raise ValueError(f'插件{plugin_name}不存在!')
+    if not plugin.disable_force_prefix and plugin.force_prefix:
+        return plugin.force_prefix[0]
+    elif plugin.disable_force_prefix and plugin.prefix:
+        return plugin.prefix[0]
+    elif plugin.allow_empty_prefix:
+        return ''
+    else:
+        return ''

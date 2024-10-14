@@ -12,19 +12,15 @@ from fastapi import WebSocket
 
 from gsuid_core.bot import _Bot
 from gsuid_core.logger import logger
+from gsuid_core.utils.plugins_update._plugins import check_start_tool
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
-from gsuid_core.utils.plugins_update._plugins import (
-    check_start_tool,
-    sync_get_plugin_url,
-    sync_change_plugin_url,
-)
 
 auto_install_dep: bool = core_plugins_config.get_config('AutoInstallDep').data
 auto_update_dep: bool = core_plugins_config.get_config('AutoUpdateDep').data
 
 core_start_def = set()
 core_shutdown_def = set()
-installed_dependencies = []
+installed_dependencies: Dict[str, str] = {}
 ignore_dep = ['python', 'fastapi', 'pydantic']
 
 
@@ -63,8 +59,16 @@ class GsServer:
         get_installed_dependencies()
         sys.path.append(str(Path(__file__).parents[1]))
         plug_path = Path(__file__).parent / 'plugins'
+
+        # 优先加载core_command
+        plug_path_list = list(plug_path.iterdir())
+        core_command_path = plug_path / 'core_command'
+        if core_command_path in plug_path_list:
+            plug_path_list.remove(core_command_path)
+            plug_path_list.insert(0, core_command_path)
+
         # 遍历插件文件夹内所有文件
-        for plugin in plug_path.iterdir():
+        for plugin in plug_path_list:
             if plugin.stem.startswith('_'):
                 continue
             # 如果发现文件夹，则视为插件包
@@ -97,7 +101,8 @@ class GsServer:
                 elif plugin.suffix == '.py':
                     importlib.import_module(f'plugins.{plugin.name[:-3]}')
 
-                '''trick'''
+                '''trick 注释掉'''
+                '''
                 if plugin.stem in ['StarRailUID', 'ArknightsUID']:
                     logger.info('[BAI] 检测是否存在失效仓库...')
                     origin_url = sync_get_plugin_url(plugin)
@@ -110,6 +115,7 @@ class GsServer:
                         new_url = origin_url.replace('qwerdvd', 'baiqwerdvd')
                         logger.success(f'[BAI] 替换新仓库地址成功: {new_url}')
                         sync_change_plugin_url(plugin, new_url)
+                '''
 
                 '''导入成功'''
                 logger.success(f'插件{plugin.stem}导入成功!')
@@ -190,6 +196,8 @@ def check_pyproject(pyproject: Path):
             dependencies = toml_data['tool']['poetry'].get('dependencies')
         else:
             dependencies = None
+    else:
+        dependencies = None
 
     if isinstance(dependencies, List):
         dependencies = parse_dependency(dependencies)
@@ -214,8 +222,16 @@ def check_pyproject(pyproject: Path):
 
 def install_dependencies(dependencies: Dict, need_update: bool = False):
     global installed_dependencies
-    start_tool = check_start_tool(True)
+    to_update = find_dependencies_to_update(
+        installed_dependencies, dependencies
+    )
+    if not to_update:
+        logger.debug('[安装/更新依赖] 无需更新依赖！')
+        return
 
+    logger.debug(f'[安装/更新依赖] 需更新依赖列表如下：\n{to_update}')
+
+    start_tool = check_start_tool(True)
     logger.debug(f'[安装/更新依赖] 当前启动工具：{start_tool}')
 
     if start_tool.startswith('pdm') and False:
@@ -223,6 +239,7 @@ def install_dependencies(dependencies: Dict, need_update: bool = False):
             'pdm run python -m ensurepip',
             capture_output=True,
             text=True,
+            shell=True,
         )
         # 检查命令执行结果
         if result.returncode != 0:
@@ -246,8 +263,8 @@ def install_dependencies(dependencies: Dict, need_update: bool = False):
     # 解析依赖项
     for (
         dependency,
-        version,
-    ) in dependencies.items():
+        _version,
+    ) in to_update.items():
         if need_update:
             condi = dependency not in ignore_dep
         else:
@@ -261,31 +278,46 @@ def install_dependencies(dependencies: Dict, need_update: bool = False):
         )
 
         if condi:
+            version: str = _version.get('required_version', '')
             logger.info(f'[安装/更新依赖] {dependency} 中...')
             CMD = f'{start_tool} install "{dependency}{version}" {extra}'
 
-            try:
-                logger.info(f'[安装/更新依赖] 开始执行：{CMD}')
-                result = subprocess.run(
-                    CMD,
-                    capture_output=True,
-                    text=True,
-                )
-                # 检查命令执行结果
-                if result.returncode == 0:
-                    logger.success(f"依赖 {dependency} 安装成功！")
-                else:
-                    logger.warning("依赖安装失败。错误信息：")
-                    logger.warning(result.stderr)
-            except Exception as e:
-                logger.exception(f'[安装/更新依赖] 安装失败：{e}')
+            retcode = execute_cmd(CMD)
+            if retcode != 0:
+                logger.warning('[安装/更新依赖] 安装失败（将会重试一次）')
+                if ' python -m' in start_tool:
+                    start_tool = start_tool.replace(' python -m', '')
+                    CMD = (
+                        f'{start_tool} install "{dependency}{version}" {extra}'
+                    )
+                execute_cmd(CMD)
             installed_dependencies = get_installed_dependencies()
+
+
+def execute_cmd(CMD: str):
+    logger.info(f'[CMD执行] 开始执行：{CMD}')
+    result = subprocess.run(
+        CMD,
+        capture_output=True,
+        text=True,
+        shell=True,
+    )
+    # 检查命令执行结果
+    if result.returncode == 0:
+        logger.success(f"[CMD执行] {CMD} 成功执行!")
+    else:
+        logger.warning(f"[CMD执行] {CMD}执行失败。错误信息：")
+        logger.exception(result.stderr)
+    return result.returncode
 
 
 def get_installed_dependencies():
     global installed_dependencies
     installed_packages = pkg_resources.working_set
-    installed_dependencies = [package.key for package in installed_packages]
+    installed_dependencies = {
+        package.key: package.version for package in installed_packages
+    }
+    return installed_dependencies
 
 
 def parse_dependency(dependency: List):
@@ -307,3 +339,46 @@ def parse_dependency_string(dependency_string: str):
         dependencies[dependency] = f"{operator}{version}"
 
     return dependencies
+
+
+def extract_numeric_version(version):
+    # 提取版本中的数字和小数点部分
+    numeric_version = re.findall(r'\d+', version)
+    return tuple(map(int, numeric_version)) if numeric_version else (0,)
+
+
+def compare_versions(installed_version, required_version):
+    installed_tuple = extract_numeric_version(installed_version)
+    required_tuple = extract_numeric_version(
+        re.sub(r'[<>=]', '', required_version)
+    )
+
+    # 基于符号进行比较
+    if "<=" in required_version:
+        return installed_tuple <= required_tuple
+    elif ">=" in required_version:
+        return installed_tuple >= required_tuple
+    elif "==" in required_version:
+        return installed_tuple == required_tuple
+    elif "<" in required_version:
+        return installed_tuple < required_tuple
+    elif ">" in required_version:
+        return installed_tuple > required_tuple
+    return False
+
+
+def find_dependencies_to_update(
+    installed_deps, required_deps
+) -> Dict[str, Dict[str, str]]:
+    to_update = {}
+
+    for dep, installed_version in installed_deps.items():
+        if dep in required_deps:
+            required_version = required_deps[dep]
+            if not compare_versions(installed_version, required_version):
+                to_update[dep] = {
+                    "installed_version": installed_version,
+                    "required_version": required_version,
+                }
+
+    return to_update

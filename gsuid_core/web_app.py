@@ -89,6 +89,8 @@ def _set_Plugins(request: Request, data: Dict, name: str):
         plguin = SL.plugins[name]
         data['pm'] = int(data['pm'])
         data['priority'] = int(data['priority'])
+        if 'prefix' in data:
+            data['prefix'] = data['prefix'].split(',')
 
         data['black_list'] = data['black_list'].split(',')
         data['white_list'] = data['white_list'].split(',')
@@ -285,7 +287,7 @@ async def _update_plugins(request: Request, data: Dict):
     if repo:
         if check_can_update(repo):
             try:
-                update_plugins(data['label'])
+                await update_plugins(data['label'])
                 retcode = 0
             except:  # noqa:E722
                 retcode = -1
