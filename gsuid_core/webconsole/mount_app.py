@@ -38,17 +38,18 @@ from fastapi_amis_admin.amis.components import (
     ButtonToolbar,
 )
 
-from gsuid_core.logger import logger
+from gsuid_core.logger import logger, handle_exceptions
 from gsuid_core.utils.database.base_models import db_url
 from gsuid_core.utils.cookie_manager.add_ck import _deal_ck
+from gsuid_core.version import __version__ as gscore_version
 from gsuid_core.webconsole.html import gsuid_webconsole_help
 from gsuid_core.webconsole.create_sv_panel import get_sv_page
-from gsuid_core.version import __version__ as GenshinUID_version
 from gsuid_core.webconsole.create_log_panel import create_log_page
 from gsuid_core.webconsole.create_task_panel import get_tasks_panel
 from gsuid_core.webconsole.create_config_panel import get_config_page
 from gsuid_core.utils.plugins_config.gs_config import core_plugins_config
 from gsuid_core.webconsole.create_analysis_panel import get_analysis_page
+from gsuid_core.webconsole.create_history_log import get_history_logs_page
 from gsuid_core.utils.database.models import GsBind, GsPush, GsUser, GsCache
 from gsuid_core.webconsole.create_batch_push_panel import get_batch_push_panel
 from gsuid_core.webconsole.create_core_config_panel import get_core_config_page
@@ -301,14 +302,12 @@ class UserBindFormAdmin(GsNormalForm):
             im = await _deal_ck(data.bot_id, data.cookie, data.user_id)
         except Exception as e:
             logger.warning(e)
-            return BaseApiOut(
-                status=-1, msg='你输入的CK可能已经失效/或者该用户ID未绑定UID'
-            )
+            return BaseApiOut(status=-1, msg='你输入的CK可能已经失效/或者该用户ID未绑定UID')  # type: ignore
         ok_num = im.count('成功')
         if ok_num < 1:
-            return BaseApiOut(status=-1, msg=im)
+            return BaseApiOut(status=-1, msg=im)  # type: ignore
         else:
-            return BaseApiOut(msg=im)
+            return BaseApiOut(msg=im)  # type: ignore
 
 
 class GsAdminModel(admin.ModelAdmin):
@@ -397,14 +396,14 @@ class MyHomeAdmin(admin.HomeAdmin):
             ),
             amis.Divider(),
             Property(
-                title='GenshinUID Info',
+                title='早柚核心 信息',
                 column=4,
                 items=[
                     Property.Item(label='system', content=platform.system()),
                     Property.Item(
                         label='python', content=platform.python_version()
                     ),
-                    Property.Item(label='version', content=GenshinUID_version),
+                    Property.Item(label='version', content=gscore_version),
                     Property.Item(label='license', content='GPLv3'),
                 ],
             ),
@@ -430,6 +429,7 @@ class AnalysisPage(GsAdminPage):
         sort=100,
     )  # type: ignore
 
+    @handle_exceptions
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(await get_analysis_page())
 
@@ -444,6 +444,7 @@ class CoreManagePage(GsAdminPage):
         sort=100,
     )  # type: ignore
 
+    @handle_exceptions
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(get_core_config_page())
 
@@ -458,6 +459,7 @@ class SVManagePage(GsAdminPage):
         sort=100,
     )  # type: ignore
 
+    @handle_exceptions
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(get_sv_page())
 
@@ -472,6 +474,7 @@ class ConfigManagePage(GsAdminPage):
         sort=100,
     )  # type: ignore
 
+    @handle_exceptions
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(get_config_page())
 
@@ -486,6 +489,7 @@ class PluginsManagePage(GsAdminPage):
         sort=100,
     )  # type: ignore
 
+    @handle_exceptions
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(get_tasks_panel())
 
@@ -500,8 +504,24 @@ class LogsPage(GsAdminPage):
         sort=100,
     )  # type: ignore
 
+    @handle_exceptions
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(create_log_page())
+
+
+@site.register_admin
+class HistoryLogsPage(GsAdminPage):
+    page_schema = PageSchema(
+        label=('历史日志'),
+        icon='fa fa-columns',
+        url='/logs',
+        isDefaultPage=True,
+        sort=100,
+    )  # type: ignore
+
+    @handle_exceptions
+    async def get_page(self, request: Request) -> Page:
+        return Page.parse_obj(get_history_logs_page())
 
 
 @site.register_admin
@@ -514,6 +534,7 @@ class PushPage(GsAdminPage):
         sort=100,
     )  # type: ignore
 
+    @handle_exceptions
     async def get_page(self, request: Request) -> Page:
         return Page.parse_obj(await get_batch_push_panel())
 

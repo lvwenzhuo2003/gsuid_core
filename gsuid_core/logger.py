@@ -1,18 +1,20 @@
+import re
 import sys
 import asyncio
 import logging
 import datetime
-from typing import TYPE_CHECKING, List
+from pathlib import Path
+from functools import wraps
+from typing import TYPE_CHECKING, Dict, List
 
 import loguru
+import aiofiles
 from uvicorn.config import LOGGING_CONFIG
 
 from gsuid_core.config import core_config
 from gsuid_core.models import Event, Message
 from gsuid_core.data_store import get_res_path
 
-is_clear: bool = False
-is_RL: bool = False
 log_history = []
 LOG_PATH = get_res_path() / 'logs'
 
@@ -24,7 +26,7 @@ if TYPE_CHECKING:
 
 logger: 'Logger' = loguru.logger
 logging.getLogger().handlers = []
-LOGGING_CONFIG["disable_existing_loggers"] = False
+LOGGING_CONFIG['disable_existing_loggers'] = False
 
 
 # https://loguru.readthedocs.io/en/stable/overview.html#entirely-compatible-with-standard-logging
@@ -111,21 +113,20 @@ def format_event(record):
 def std_format_event(record):
     try:
         data = format_event(record)
-        if is_RL:
-            _data = data.format_map(record)
-            _data = (
-                _data.replace('<g>', '\033[37m')
-                .replace('</g>', '\033[0m')
-                .replace('<c><u>', '\033[34m')
-                .replace('</u></c>', '\033[0m')
-                .replace('<m><b>', '\033[35m')
-                .replace('</b></m>', '\033[0m')
-                .replace('<c><b>', '\033[32m')
-                .replace('</b></c>', '\033[0m')
-                .replace('<lvl>', '')
-                .replace('</lvl>', '')
-            )
-            log_history.append(_data.format_map(record))
+        _data = (
+            data.replace('<g>', '\033[37m')
+            .replace('</g>', '\033[0m')
+            .replace('<c><u>', '\033[34m')
+            .replace('</u></c>', '\033[0m')
+            .replace('<m><b>', '\033[35m')
+            .replace('</b></m>', '\033[0m')
+            .replace('<c><b>', '\033[32m')
+            .replace('</b></c>', '\033[0m')
+            .replace('<lvl>', '')
+            .replace('</lvl>', '')
+        )
+        log = _data.format_map(record)
+        log_history.append(log[:-5])
         return data
     except:  # noqa: E722
         return 'UnknowLog'
@@ -145,12 +146,12 @@ if 'stdout' in logger_list:
         level=LEVEL,
         diagnose=True,
         backtrace=True,
-        filter=lambda record: record["level"].no < 40,
+        filter=lambda record: record['level'].no < 40,
         format=std_format_event,
     )
 
 if 'stderr' in logger_list:
-    logger.add(sys.stderr, level="ERROR")
+    logger.add(sys.stderr, level='ERROR')
 
 if 'file' in logger_list:
     logger.add(
@@ -165,25 +166,83 @@ if 'file' in logger_list:
 
 async def read_log():
     global log_history
-    global is_RL
-    is_RL = True
     index = 0
     while True:
         if index <= len(log_history) - 1:
-            yield log_history[index]
+            if log_history[index]:
+                yield log_history[index]
             index += 1
         else:
             await asyncio.sleep(1)
 
 
-async def clear_log():
-    global is_clear
+async def clean_log():
     global log_history
+    while True:
+        await asyncio.sleep(480)
+        log_history = []
 
-    if is_clear:
-        return
 
-    is_clear = True
-    await asyncio.sleep(18000)
-    log_history = []
-    is_clear = False
+def handle_exceptions(async_function):
+    @wraps(async_function)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await async_function(*args, **kwargs)
+        except Exception as e:
+            logger.exception('[错误发生] %s: %s', async_function.__name__, e)
+            return None
+
+    return wrapper
+
+
+class HistoryLogData:
+    def __init__(self):
+        self.log_list: Dict[str, List[Dict]] = {}
+
+    async def get_parse_logs(self, log_file_path: Path):
+        if log_file_path.name in self.log_list:
+            return self.log_list[log_file_path.name]
+
+        log_entries: List[Dict] = []
+
+        log_entry_pattern = re.compile(
+            r'^(\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)] ([^\|]+) \| (.*)'
+        )
+
+        async with aiofiles.open(log_file_path, 'r', encoding='utf-8') as file:
+            lines = await file.readlines()
+
+        current_entry = None
+
+        _id = 1
+        for line in lines:
+            line = line.strip()
+            match = log_entry_pattern.match(line)
+
+            if match:
+                if current_entry:
+                    log_entries.append(current_entry)
+                current_entry = {
+                    'id': _id,
+                    '时间': match.group(1),
+                    '日志等级': match.group(2),
+                    '模块': match.group(3).strip(),
+                    '内容': match.group(4).strip(),
+                }
+                _id += 1
+            elif current_entry:
+                current_entry['内容'] += '\n' + line
+
+        if current_entry:
+            log_entries.append(current_entry)
+
+        self.log_list[log_file_path.name] = log_entries
+        return log_entries
+
+
+def get_all_log_path():
+    return [
+        file
+        for file in LOG_PATH.iterdir()
+        if file.is_file() and file.suffix == '.log'
+    ]
