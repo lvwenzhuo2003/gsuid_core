@@ -15,4 +15,17 @@ SP_CONFIG: Dict[str, GSC] = {
         'dark',
         ['light', 'dark'],
     ),
+    'AtSenderPos': GsStrConfig(
+        '@发送者位置',
+        '消息@发送者的位置',
+        '消息最前',
+        ['消息最前', '消息最后'],
+    ),
+    'SameUserEventCD': GsIntConfig(
+        '启用同个人触发命令CD(0为不启用)',
+        '启用同个人触发命令CD(0为不启用)',
+        0,
+        3600,
+        [0, 1, 2, 3, 5, 10, 15, 30],
+    ),
 }

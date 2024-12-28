@@ -1,18 +1,69 @@
-from typing import List, Type, Optional
+from typing import List, Type, Union, Optional
 
 from sqlalchemy import or_
 from sqlmodel import Field, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from gsuid_core.bot import Bot
+from gsuid_core.gss import gss
+from gsuid_core.models import Event, Message
+from gsuid_core.message_models import ButtonType
 
 from .base_models import (
     Bind,
     Push,
     User,
     Cache,
+    BaseModel,
     BaseIDModel,
     BaseBotIDModel,
     with_session,
 )
+
+
+class Subscribe(BaseModel, table=True):
+    group_id: Optional[str] = Field(title='群ID', default=None)
+    task_name: str = Field(title='任务名称', default=None)
+    bot_self_id: str = Field(title='机器人自身ID', default=None)
+    user_type: str = Field(title='发送类型', default=None)
+    extra_message: Optional[str] = Field(title='额外消息', default=None)
+
+    async def send(
+        self,
+        reply: Optional[
+            Union[
+                Message,
+                List[Message],
+                List[str],
+                str,
+                bytes,
+            ]
+        ] = None,
+        option_list: Optional[ButtonType] = None,
+        unsuported_platform: bool = False,
+        sep: str = '\n',
+        command_tips: str = '请输入以下命令之一:',
+        command_start_text: str = '',
+    ):
+        for bot_id in gss.active_bot:
+            BOT = gss.active_bot[bot_id]
+            ev = Event(
+                bot_id=self.bot_id,
+                user_id=self.user_id,
+                bot_self_id=self.bot_self_id,
+                user_type=self.user_type,  # type: ignore
+                group_id=self.group_id,
+                real_bot_id=self.bot_id,
+            )
+            bot = Bot(BOT, ev)
+            await bot.send_option(
+                reply,
+                option_list,
+                unsuported_platform,
+                sep,
+                command_tips,
+                command_start_text,
+            )
 
 
 class CoreTag(BaseIDModel, table=True):
@@ -54,10 +105,10 @@ class CoreTag(BaseIDModel, table=True):
 class CoreUser(BaseBotIDModel, table=True):
     __table_args__ = {'extend_existing': True}
 
-    user_id: str = Field(default='1', title='账号')
-    group_id: Optional[str] = Field(default='1', title='群号')
-    user_name: str = Field(default='1', title='用户名')
-    user_icon: str = Field(default='1', title='用户头像')
+    user_id: str = Field(default=None, title='账号')
+    group_id: Optional[str] = Field(default=None, title='群号')
+    user_name: Optional[str] = Field(default='1', title='用户名')
+    user_icon: Optional[str] = Field(default='1', title='用户头像')
 
     @classmethod
     @with_session
@@ -111,15 +162,41 @@ class CoreUser(BaseBotIDModel, table=True):
         bot_id: str,
         user_id: str,
         group_id: Optional[str],
+        user_name: Optional[str],
+        user_icon: Optional[str],
     ) -> int:
-        data: Optional[Type["CoreUser"]] = await cls.base_select_data(
-            bot_id=bot_id, user_id=user_id, group_id=group_id
+        data: Optional["CoreUser"] = await cls.base_select_data(
+            bot_id=bot_id,
+            user_id=user_id,
+            group_id=group_id,
         )
+
+        opt = {}
+        if user_name is not None:
+            opt['user_name'] = user_name
+        else:
+            opt['user_name'] = '1'
+
+        if user_icon is not None:
+            opt['user_icon'] = user_icon
+        else:
+            opt['user_icon'] = '1'
+
         if not data:
             await cls.full_insert_data(
                 bot_id=bot_id,
                 user_id=user_id,
                 group_id=group_id,
+                **opt,
+            )
+        else:
+            await cls.update_data_by_xx(
+                {
+                    'bot_id': bot_id,
+                    'user_id': user_id,
+                    'group_id': group_id,
+                },
+                **opt,
             )
 
         '''
@@ -378,11 +455,8 @@ class GsUID(BaseIDModel, table=True):
         game_name: Optional[str] = None,
         **data,
     ):
-        sql = (
-            update(cls)
-            .where(cls.main_uid == uid)
-            .where(cls.game_name == game_name)
-        )
+        sql = update(cls).where(cls.main_uid == uid)
+        sql = sql.where(cls.game_name == game_name)
         if data is not None:
             query = sql.values(**data)
             query.execution_options(synchronize_session='fetch')
